@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 100">
+  <!-- Text Medicare -->
+  <text x="20" y="60" font-family="Arial" font-size="40" font-weight="bold" fill="#2C5282">
+    Medicare
+  </text>
+  
+  <!-- Plus symbol in a circle -->
+  <g transform="translate(220, 45)">
+    <circle cx="0" cy="0" r="25" fill="#4299E1"/>
+    <path d="M-15 0 H15 M0 -15 V15" stroke="white" stroke-width="6" stroke-linecap="round"/>
+  </g>
+</svg>

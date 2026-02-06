@@ -1,0 +1,90 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  password     String
+  image        String?
+  address      Json?         @default("{\"line1\":\"\",\"line2\":\"\"}")
+  gender       String        @default("Not Selected")
+  dob          String        @default("Not Selected")
+  phone        String        @default("0000000000")
+  appointments Appointment[]
+  prescriptions Prescription[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+model Doctor {
+  id           String        @id @default(cuid())
+  name         String
+  email        String        @unique
+  password     String
+  image        String?
+  speciality   String?
+  degree       String?
+  experience   String?
+  about        String?
+  languages    String?
+  awards       String?
+  available    Boolean       @default(true)
+  fees         Int?
+  address      Json?
+  createdAt    Int           @default(dbgenerated("extract(epoch from now())::int"))
+  slots_booked Json          @default("{}")
+  appointments Appointment[]
+  updatedAt    DateTime      @updatedAt
+}
+
+model Appointment {
+  id          String   @id @default(cuid())
+  userId      String
+  docId       String
+  slotDate    String
+  slotTime    String
+  userData    Json
+  docData     Json
+  amount      Int
+  date        Int      @default(dbgenerated("extract(epoch from now())::int"))
+  cancelled   Boolean  @default(false)
+  payment     Boolean  @default(false)
+  isCompleted Boolean  @default(false)
+  meetingId   String?
+  user        User     @relation(fields: [userId], references: [id])
+  doctor      Doctor   @relation(fields: [docId], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  startTime    DateTime?
+  endTime      DateTime?
+  duration     Int?
+  diagnosis    String?
+  prescription String?
+  notes        String?
+  followUpDate DateTime?
+}
+
+model Prescription {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  imageUrl      String
+  extractedData Json?    @default("{}")
+  medicines     Json     @default("[]")
+  isVerified    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
