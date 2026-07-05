@@ -198,6 +198,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 
 ## 👨‍💻 Author
 
-**Ayush Jangid**
+**Ayush Carpenter**
 
 If you found this project helpful, consider giving it a ⭐ on GitHub!
