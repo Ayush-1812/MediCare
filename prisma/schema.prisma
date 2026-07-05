@@ -11,7 +11,6 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -24,10 +23,11 @@ model User {
   gender       String        @default("Not Selected")
   dob          String        @default("Not Selected")
   phone        String        @default("0000000000")
-  appointments Appointment[]
-  prescriptions Prescription[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  appointments   Appointment[]
+  prescriptions  Prescription[]
+  conversations  Conversation[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 }
 
 model Doctor {
@@ -88,4 +88,53 @@ model Prescription {
   isVerified    Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+model Conversation {
+  id            String    @id @default(cuid())
+
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  title         String    @default("New Conversation")
+
+  messages      Message[]
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  lastMessageAt DateTime?    // Helps sort chats by recent activity
+
+  @@index([userId])
+  @@index([lastMessageAt])
+}
+
+model Message {
+  id             String       @id @default(cuid())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  role           MessageRole
+
+  content        String       @db.Text
+
+  createdAt      DateTime     @default(now())
+
+  model          String?
+
+  toolUsed       String?
+
+  tokenUsage     Int?
+
+  metadata       Json?
+
+  @@index([conversationId])
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+  TOOL
 }

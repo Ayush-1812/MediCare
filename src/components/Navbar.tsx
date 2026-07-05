@@ -4,6 +4,7 @@ import React, { useContext, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { AppContext } from '../context/AppContext'
+import { Sparkles } from 'lucide-react'
 
 const Navbar = () => {
     const router = useRouter()
@@ -21,7 +22,7 @@ const Navbar = () => {
     }
 
     return (
-        <div className='flex items-center justify-between text-sm py-4 mb-5 border-b border-b-gray-400'>
+        <div className='flex items-center justify-between text-sm py-6 mb-5 md:mx-10 px-6 sm:px-10 lg:px-20'>
             <Link href="/">
                 <img className='w-44 cursor-pointer' src="/assets/logo.svg" alt='Logo' />
             </Link>
@@ -30,12 +31,21 @@ const Navbar = () => {
                 <Link href="/">
                     <li className={`py-1 ${pathname === '/' ? 'text-primary' : ''}`}>HOME</li>
                 </Link>
-                <Link href="/doctors">
-                    <li className={`py-1 ${pathname.startsWith('/doctors') ? 'text-primary' : ''}`}>ALL DOCTORS</li>
-                </Link>
-                <Link href="/pharmacies">
-                    <li className={`py-1 ${pathname === '/pharmacies' ? 'text-primary' : ''}`}>NEARBY PHARMACIES</li>
-                </Link>
+                {(token || context?.docToken) && (
+                    <>
+                        <Link href="/doctors">
+                            <li className={`py-1 transition-colors ${pathname.startsWith('/doctors') ? 'text-primary font-semibold' : 'hover:text-gray-900'}`}>ALL DOCTORS</li>
+                        </Link>
+                        <Link href="/pharmacies">
+                            <li className={`py-1 transition-colors ${pathname === '/pharmacies' ? 'text-primary font-semibold' : 'hover:text-gray-900'}`}>NEARBY PHARMACIES</li>
+                        </Link>
+                        <Link href="/ai-assistant">
+                            <li className={`py-1 flex items-center gap-1.5 transition-colors ${pathname === '/ai-assistant' ? 'text-primary font-semibold' : 'hover:text-primary/80'}`}>
+                                <Sparkles className="w-4 h-4" /> AI ASSISTANT
+                            </li>
+                        </Link>
+                    </>
+                )}
                 <Link href="/about">
                     <li className={`py-1 ${pathname === '/about' ? 'text-primary' : ''}`}>ABOUT</li>
                 </Link>
@@ -89,7 +99,16 @@ const Navbar = () => {
                 </div>
                 <ul className='flex flex-col items-center gap-2 mt-5 px-5 text-lg font-medium'>
                     <Link href="/" onClick={() => setShowMenu(false)}><p className="px-4 py-2 rounded inline-block">HOME</p></Link>
-                    <Link href="/doctors" onClick={() => setShowMenu(false)}><p className="px-4 py-2 rounded inline-block">ALL DOCTORS</p></Link>
+                    {(token || context?.docToken) && (
+                        <>
+                            <Link href="/doctors" onClick={() => setShowMenu(false)}><p className="px-4 py-2 rounded inline-block">ALL DOCTORS</p></Link>
+                            <Link href="/ai-assistant" onClick={() => setShowMenu(false)}>
+                                <p className="px-4 py-2 rounded inline-flex items-center gap-2 text-primary font-medium">
+                                    <Sparkles className="w-4 h-4" /> AI ASSISTANT
+                                </p>
+                            </Link>
+                        </>
+                    )}
                     <Link href="/about" onClick={() => setShowMenu(false)}><p className="px-4 py-2 rounded inline-block">ABOUT</p></Link>
                     <Link href="/contact" onClick={() => setShowMenu(false)}><p className="px-4 py-2 rounded inline-block">CONTACT</p></Link>
                 </ul>

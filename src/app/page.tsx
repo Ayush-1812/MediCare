@@ -1,15 +1,23 @@
-import Header from "@/components/Header";
-import SpecialityMenu from "@/components/SpecialityMenu";
-import TopDoctors from "@/components/TopDoctors";
-import Banner from "@/components/Banner";
+import HeroSection from "@/components/landing/HeroSection";
+import WhyChooseSection from "@/components/landing/WhyChooseSection";
+import HowItWorksSection from "@/components/landing/HowItWorksSection";
+import AIEcosystemSection from "@/components/landing/AIEcosystemSection";
+import FeaturedSpecialistsSection from "@/components/landing/FeaturedSpecialistsSection";
+import AIMockupsSection from "@/components/landing/AIMockupsSection";
+import FAQSection from "@/components/landing/FAQSection";
+import CTASection from "@/components/landing/CTASection";
 
 export default function Home() {
   return (
-    <div>
-      <Header />
-      <SpecialityMenu />
-      <TopDoctors />
-      <Banner />
+    <div className="font-sans overflow-hidden">
+      <HeroSection />
+      <WhyChooseSection />
+      <HowItWorksSection />
+      <AIEcosystemSection />
+      <FeaturedSpecialistsSection />
+      <AIMockupsSection />
+      <FAQSection />
+      <CTASection />
     </div>
   );
 }

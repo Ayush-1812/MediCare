@@ -2,41 +2,53 @@ import React from 'react'
 
 const Footer = () => {
     return (
-        <div className='md:mx-10'>
-            <div className='flex flex-col sm:grid grid-cols-[3fr_1fr_1fr] gap-14 my-10 mt-40 text-sm'>
+        <div className='md:mx-10 px-6 sm:px-10 lg:px-20'>
+            <div className='flex flex-col sm:grid grid-cols-1 md:grid-cols-5 gap-8 md:gap-14 my-10 mt-20 text-sm'>
                 {/* Left Side */}
-                <div>
-                    <img className='mb-5 w-40' src="/assets/logo.svg" alt="" />
-                    <p className='w-full md:w-2/3 text-gray-600 leading-6'>
+                <div className='md:col-span-2'>
+                    <img className='mb-5 w-40' src="/assets/logo.svg" alt="MediCare Logo" />
+                    <p className='w-full text-gray-600 leading-relaxed pr-0 md:pr-10'>
                         Medicare is your trusted partner for managing health appointments with ease. We connect patients with top-rated doctors across various specialties, ensuring quality healthcare is just a click away.
                     </p>
                 </div>
 
-                {/* Center Side */}
+                {/* Columns */}
                 <div>
-                    <p className='text-xl font-medium mb-5'>COMPANY</p>
-                    <ul className='flex flex-col gap-2 text-gray-600 font-medium'>
-                        <li>Home</li>
-                        <li>About us</li>
-                        <li>Contact us</li>
-                        <li>Privacy policy</li>
+                    <p className='text-lg font-bold text-gray-900 mb-5'>COMPANY</p>
+                    <ul className='flex flex-col gap-3 text-gray-600 font-medium'>
+                        <li className='hover:text-blue-600 cursor-pointer transition-colors'>Home</li>
+                        <li className='hover:text-blue-600 cursor-pointer transition-colors'>About us</li>
+                        <li className='hover:text-blue-600 cursor-pointer transition-colors'>Careers</li>
+                        <li className='hover:text-blue-600 cursor-pointer transition-colors'>Press</li>
                     </ul>
                 </div>
 
-                {/* Right Side */}
                 <div>
-                    <p className='text-xl font-medium mb-5'>GET IN TOUCH</p>
-                    <ul className='flex flex-col gap-2 text-gray-600 font-medium'>
-                        <li>+919587567453</li>
-                        <li>ayushjangid5102@gmail.com</li>
+                    <p className='text-lg font-bold text-gray-900 mb-5'>SERVICES</p>
+                    <ul className='flex flex-col gap-3 text-gray-600 font-medium'>
+                        <li className='hover:text-blue-600 cursor-pointer transition-colors'>AI Chatbot</li>
+                        <li className='hover:text-blue-600 cursor-pointer transition-colors'>Consultations</li>
+                        <li className='hover:text-blue-600 cursor-pointer transition-colors'>Prescriptions</li>
+                        <li className='hover:text-blue-600 cursor-pointer transition-colors'>Health Records</li>
+                    </ul>
+                </div>
+
+                <div>
+                    <p className='text-lg font-bold text-gray-900 mb-5'>SUPPORT</p>
+                    <ul className='flex flex-col gap-3 text-gray-600 font-medium'>
+                        <li className='hover:text-blue-600 cursor-pointer transition-colors'>Help Center</li>
+                        <li className='hover:text-blue-600 cursor-pointer transition-colors'>Contact Us</li>
+                        <li className='hover:text-blue-600 cursor-pointer transition-colors'>Privacy Policy</li>
+                        <li className='hover:text-blue-600 cursor-pointer transition-colors'>Terms of Service</li>
                     </ul>
                 </div>
             </div>
 
             {/* Copyright Text */}
-            <div>
-                <hr />
-                <p className='py-5 text-sm text-center'>Copyright 2024@ Medicare - All Right Reserved.</p>
+            <div className='border-t border-gray-200 mt-10'>
+                <p className='py-6 text-sm text-gray-500 text-center'>
+                    © 2024 MediCare+. All rights reserved.
+                </p>
             </div>
         </div>
     )
