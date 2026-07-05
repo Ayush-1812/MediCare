@@ -1,36 +1,203 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🏥 MediCare – AI-Powered Healthcare Management Platform
 
-## Getting Started
+> An AI-first healthcare platform that combines appointment management, intelligent medical assistance, and personalized health insights through a modular AI architecture.
 
-First, run the development server:
+🌐 **Live Demo:** https://medi-care-2vbm.vercel.app/
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+---
+
+## ✨ Core Features
+
+- 🤖 **Aether AI Assistant** powered by Google Gemini 2.5 Flash
+- 📅 Smart Appointment Management
+- 🩺 AI-based Symptom Assessment
+- ⚠️ Emergency Severity Detection
+- 💬 Real-time Streaming AI Responses
+- 🧠 Conversation Memory
+- 🔐 JWT Authentication & Protected Routes
+- 📱 Fully Responsive Interface
+
+---
+
+# 🏗️ AI Architecture
+
+```text
+                         User
+                           │
+                           ▼
+                  Next.js Frontend
+                           │
+                           ▼
+                    API Route Layer
+                           │
+                           ▼
+                  Authentication Layer
+                           │
+                           ▼
+                    AI Orchestrator
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+        ▼                  ▼                  ▼
+  Intent Router      Tool Registry      Conversation Memory
+                           │
+        ┌──────────────────┼──────────────────┐
+        │                  │                  │
+        ▼                  ▼                  ▼
+ Appointment Tool   Symptom Tool     (Future AI Tools)
+        │                  │
+        ▼                  ▼
+Appointment      Severity Classifier
+Context Service         │
+        └───────────────┬───────────────┐
+                        ▼
+                 Context Builder
+                        │
+                        ▼
+                 Prompt Manager
+                        │
+                        ▼
+            Google Gemini 2.5 Flash
+                        │
+                        ▼
+              Response Formatter
+                        │
+                        ▼
+              Streaming Response
+                        │
+                        ▼
+                   Frontend UI
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+# 🧠 AI Request Flow
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```text
+User Query
+    │
+    ▼
+Authentication
+    │
+    ▼
+Intent Detection
+    │
+    ▼
+Relevant AI Tool
+    │
+    ▼
+Context Extraction
+    │
+    ▼
+Context Builder
+    │
+    ▼
+Prompt Manager
+    │
+    ▼
+Gemini 2.5 Flash
+    │
+    ▼
+Formatted Response
+    │
+    ▼
+Streaming to UI
+```
 
-## Learn More
+---
 
-To learn more about Next.js, take a look at the following resources:
+# 🛠️ Tech Stack
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Frontend
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Backend
+- Next.js API Routes
+- Prisma ORM
+- PostgreSQL (Supabase)
+- JWT Authentication
 
-## Deploy on Vercel
+### AI Stack
+- Google Gemini 2.5 Flash
+- AI Orchestrator
+- Intent Router
+- Tool Registry
+- Context Builder
+- Prompt Manager
+- Response Formatter
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Deployment
+- Vercel
+- Supabase
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+# 🚀 Getting Started
+
+```bash
+git clone <repository-url>
+cd medicare
+
+npm install
+
+npx prisma generate
+npx prisma db push
+
+npm run dev
+```
+
+Create a `.env` file:
+
+```env
+DATABASE_URL=
+DIRECT_URL=
+JWT_SECRET=
+GEMINI_API_KEY=
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+```
+
+---
+
+# 📂 Current AI Modules
+
+| Module | Status |
+|---------|--------|
+| Authentication | ✅ |
+| AI Orchestrator | ✅ |
+| Intent Router | ✅ |
+| Tool Registry | ✅ |
+| Context Builder | ✅ |
+| Prompt Manager | ✅ |
+| Gemini Integration | ✅ |
+| Appointment Intelligence | ✅ |
+| Symptom Assessment | ✅ |
+| Severity Classifier | ✅ |
+| Conversation Memory | ✅ |
+| Streaming Responses | ✅ |
+
+---
+
+# 🚧 Roadmap
+
+- ✅ Appointment Intelligence
+- ✅ Symptom Assessment
+- 🔄 Prescription Intelligence
+- 🔄 Medical Report Intelligence
+- 🔄 Health Summary
+- 🔄 Timeline Intelligence
+- 🔄 Multi-tool AI Reasoning
+- 🔄 Dark Mode
+- 🔄 Docker Support
+
+---
+
+## 👨‍💻 Author
+
+**Ayush Jangid**
+
+If you found this project helpful, consider giving it a ⭐ on GitHub!
