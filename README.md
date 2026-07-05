@@ -6,16 +6,31 @@
 
 ---
 
-## ✨ Core Features
+## ✨ Features
 
-- 🤖 **Aether AI Assistant** powered by Google Gemini 2.5 Flash
-- 📅 Smart Appointment Management
-- 🩺 AI-based Symptom Assessment
-- ⚠️ Emergency Severity Detection
-- 💬 Real-time Streaming AI Responses
-- 🧠 Conversation Memory
-- 🔐 JWT Authentication & Protected Routes
-- 📱 Fully Responsive Interface
+### 🤖 Aether AI Assistant
+AI-powered healthcare assistant with contextual conversations, symptom analysis, emergency detection, personalized guidance, and real-time streaming responses powered by **Google Gemini 2.5 Flash**.
+
+### 📅 Smart Appointment Management
+Book, manage, and track appointments with doctors, including upcoming visits, appointment history, and AI-assisted scheduling context.
+
+### 💊 Prescription Management
+Upload and digitize prescriptions using AI-powered OCR, automatically extract medications, and securely maintain prescription history.
+
+### 📹 Video Consultation
+Connect with doctors through secure, real-time video consultations for seamless virtual healthcare.
+
+### 📝 AI Consultation Reports
+Automatically generate structured consultation summaries after video calls, including diagnosis, prescribed medicines, and follow-up recommendations.
+
+### 🩺 Symptom Assessment
+Describe symptoms in natural language and receive AI-powered severity assessment, self-care guidance, OTC suggestions, and recommendations on when to seek medical attention.
+
+### 📍 Nearby Pharmacy Finder
+Discover nearby pharmacies with location-aware recommendations and quick access to medicine availability.
+
+### 🔒 Secure Authentication
+JWT-based authentication with protected routes, secure session management, and user-specific access to healthcare records.
 
 ---
 
