@@ -210,7 +210,176 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 - 🔄 Docker Support
 
 ---
+## 🏗️ MediCare End-to-End Architecture
 
+```mermaid
+flowchart TD
+
+%% ==========================
+%% USER
+%% ==========================
+U[👤 Patient / Doctor]
+
+%% ==========================
+%% FRONTEND
+%% ==========================
+subgraph Frontend["🌐 Frontend (Next.js + React)"]
+    HOME[Home / Dashboard]
+    APPT[Appointments]
+    CHAT[Aether AI Assistant]
+    VIDEO[Video Consultation]
+    PRESC[Prescription Upload]
+    REPORTS[Medical Reports]
+    PHARMACY[Nearby Pharmacy]
+end
+
+U --> HOME
+
+HOME --> APPT
+HOME --> CHAT
+HOME --> VIDEO
+HOME --> PRESC
+HOME --> REPORTS
+HOME --> PHARMACY
+
+%% ==========================
+%% API
+%% ==========================
+HOME --> API
+APPT --> API
+CHAT --> API
+VIDEO --> API
+PRESC --> API
+REPORTS --> API
+PHARMACY --> API
+
+API[Next.js API Routes]
+
+%% ==========================
+%% AUTH
+%% ==========================
+API --> AUTH
+
+AUTH[JWT Authentication]
+
+%% ==========================
+%% DATABASE
+%% ==========================
+AUTH --> DB
+
+DB[(Supabase PostgreSQL)]
+
+DB --> USERS[Users]
+
+DB --> APPOINTMENTS[Appointments]
+
+DB --> PRESCRIPTIONS[Prescriptions]
+
+DB --> REPORTDATA[Medical Reports]
+
+DB --> CONVERSATIONS[AI Conversations]
+
+%% ==========================
+%% AI SYSTEM
+%% ==========================
+AUTH --> ORCH
+
+subgraph AI["🧠 Aether AI Engine"]
+
+ORCH[AI Orchestrator]
+
+ORCH --> MEMORY[Conversation Memory]
+
+ORCH --> ROUTER[Intent Router]
+
+ROUTER --> REGISTRY[Tool Registry]
+
+REGISTRY --> TOOL1[Appointment Tool]
+
+REGISTRY --> TOOL2[Symptom Assessment Tool]
+
+REGISTRY --> TOOL3[Prescription Tool]
+
+REGISTRY --> TOOL4[Medical Report Tool]
+
+REGISTRY --> TOOL5[Nearby Pharmacy Tool]
+
+REGISTRY --> FUTURE[Future AI Tools]
+
+TOOL2 --> CLASSIFIER[Severity Classifier]
+
+TOOL1 --> CONTEXT
+
+TOOL2 --> CONTEXT
+
+TOOL3 --> CONTEXT
+
+TOOL4 --> CONTEXT
+
+TOOL5 --> CONTEXT
+
+CLASSIFIER --> CONTEXT
+
+MEMORY --> CONTEXT
+
+CONTEXT[Context Builder]
+
+CONTEXT --> PROMPT[Prompt Manager]
+
+PROMPT --> GEMINI[Google Gemini 2.5 Flash]
+
+GEMINI --> FORMATTER[Response Formatter]
+
+FORMATTER --> STREAM[Streaming Response]
+
+end
+
+%% ==========================
+%% DATABASE CONNECTIONS
+%% ==========================
+
+TOOL1 --> APPOINTMENTS
+
+TOOL3 --> PRESCRIPTIONS
+
+TOOL4 --> REPORTDATA
+
+MEMORY --> CONVERSATIONS
+
+%% ==========================
+%% EXTERNAL SERVICES
+%% ==========================
+
+subgraph External["☁️ External Services"]
+
+OCR[OCR Engine]
+
+MAPS[Google Maps]
+
+VIDEOAPI[Video Calling Service]
+
+end
+
+PRESC --> OCR
+
+VIDEO --> VIDEOAPI
+
+TOOL5 --> MAPS
+
+%% ==========================
+%% RESPONSE
+%% ==========================
+
+STREAM --> CHAT
+
+%% ==========================
+%% AI REPORT FLOW
+%% ==========================
+
+VIDEO --> REPORTDATA
+
+REPORTDATA --> TOOL4
+```
 ## 👨‍💻 Author
 
 **Ayush Carpenter**
