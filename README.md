@@ -210,175 +210,72 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 - 🔄 Docker Support
 
 ---
-## 🏗️ MediCare End-to-End Architecture
+## 🏗️ MediCare System Architecture
 
 ```mermaid
-flowchart TD
+flowchart LR
 
-%% ==========================
-%% USER
-%% ==========================
-U[👤 Patient / Doctor]
+%% Users
+Patient[👤 Patient]
+Doctor[🩺 Doctor]
 
-%% ==========================
-%% FRONTEND
-%% ==========================
-subgraph Frontend["🌐 Frontend (Next.js + React)"]
-    HOME[Home / Dashboard]
-    APPT[Appointments]
-    CHAT[Aether AI Assistant]
-    VIDEO[Video Consultation]
-    PRESC[Prescription Upload]
-    REPORTS[Medical Reports]
-    PHARMACY[Nearby Pharmacy]
-end
+%% Frontend
+Patient --> Frontend
+Doctor --> Frontend
 
-U --> HOME
+Frontend[Next.js Frontend]
 
-HOME --> APPT
-HOME --> CHAT
-HOME --> VIDEO
-HOME --> PRESC
-HOME --> REPORTS
-HOME --> PHARMACY
+%% Features
+Frontend --> Auth[JWT Authentication]
 
-%% ==========================
-%% API
-%% ==========================
-HOME --> API
-APPT --> API
-CHAT --> API
-VIDEO --> API
-PRESC --> API
-REPORTS --> API
-PHARMACY --> API
+Auth --> Dashboard[Patient & Doctor Dashboard]
 
-API[Next.js API Routes]
+Dashboard --> Appointment[Appointment Management]
 
-%% ==========================
-%% AUTH
-%% ==========================
-API --> AUTH
+Dashboard --> VideoCall[Video Consultation]
 
-AUTH[JWT Authentication]
+Dashboard --> Prescription[Prescription Upload & OCR]
 
-%% ==========================
-%% DATABASE
-%% ==========================
-AUTH --> DB
+Dashboard --> Reports[Medical Reports]
 
-DB[(Supabase PostgreSQL)]
+Dashboard --> Pharmacy[Nearby Pharmacy]
 
-DB --> USERS[Users]
+Dashboard --> AI[Aether AI Assistant]
 
-DB --> APPOINTMENTS[Appointments]
+%% Backend
+Appointment --> API[Next.js API Routes]
+VideoCall --> API
+Prescription --> API
+Reports --> API
+Pharmacy --> API
+AI --> API
 
-DB --> PRESCRIPTIONS[Prescriptions]
+%% Database
+API --> Database[(Supabase PostgreSQL)]
 
-DB --> REPORTDATA[Medical Reports]
+%% AI Pipeline
+API --> Orchestrator[AI Orchestrator]
 
-DB --> CONVERSATIONS[AI Conversations]
+Orchestrator --> Router[Intent Router]
 
-%% ==========================
-%% AI SYSTEM
-%% ==========================
-AUTH --> ORCH
+Router --> Tools[AI Tools]
 
-subgraph AI["🧠 Aether AI Engine"]
+Tools --> Context[Context Builder]
 
-ORCH[AI Orchestrator]
+Context --> Prompt[Prompt Manager]
 
-ORCH --> MEMORY[Conversation Memory]
+Prompt --> Gemini[Google Gemini 2.5 Flash]
 
-ORCH --> ROUTER[Intent Router]
+Gemini --> Response[Response Formatter]
 
-ROUTER --> REGISTRY[Tool Registry]
+Response --> AI
 
-REGISTRY --> TOOL1[Appointment Tool]
+%% External Services
+Prescription --> OCR[OCR Engine]
 
-REGISTRY --> TOOL2[Symptom Assessment Tool]
+VideoCall --> VideoAPI[Video Call Service]
 
-REGISTRY --> TOOL3[Prescription Tool]
-
-REGISTRY --> TOOL4[Medical Report Tool]
-
-REGISTRY --> TOOL5[Nearby Pharmacy Tool]
-
-REGISTRY --> FUTURE[Future AI Tools]
-
-TOOL2 --> CLASSIFIER[Severity Classifier]
-
-TOOL1 --> CONTEXT
-
-TOOL2 --> CONTEXT
-
-TOOL3 --> CONTEXT
-
-TOOL4 --> CONTEXT
-
-TOOL5 --> CONTEXT
-
-CLASSIFIER --> CONTEXT
-
-MEMORY --> CONTEXT
-
-CONTEXT[Context Builder]
-
-CONTEXT --> PROMPT[Prompt Manager]
-
-PROMPT --> GEMINI[Google Gemini 2.5 Flash]
-
-GEMINI --> FORMATTER[Response Formatter]
-
-FORMATTER --> STREAM[Streaming Response]
-
-end
-
-%% ==========================
-%% DATABASE CONNECTIONS
-%% ==========================
-
-TOOL1 --> APPOINTMENTS
-
-TOOL3 --> PRESCRIPTIONS
-
-TOOL4 --> REPORTDATA
-
-MEMORY --> CONVERSATIONS
-
-%% ==========================
-%% EXTERNAL SERVICES
-%% ==========================
-
-subgraph External["☁️ External Services"]
-
-OCR[OCR Engine]
-
-MAPS[Google Maps]
-
-VIDEOAPI[Video Calling Service]
-
-end
-
-PRESC --> OCR
-
-VIDEO --> VIDEOAPI
-
-TOOL5 --> MAPS
-
-%% ==========================
-%% RESPONSE
-%% ==========================
-
-STREAM --> CHAT
-
-%% ==========================
-%% AI REPORT FLOW
-%% ==========================
-
-VIDEO --> REPORTDATA
-
-REPORTDATA --> TOOL4
+Pharmacy --> Maps[Google Maps API]
 ```
 ## 👨‍💻 Author
 
