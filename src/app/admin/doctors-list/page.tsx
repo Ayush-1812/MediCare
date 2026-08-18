@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { allDoctors, changeAvailability } from '@/app/actions/adminActions'
 import { toast } from 'react-toastify'
+import { ToggleLeft, ToggleRight } from 'lucide-react'
 
 const DoctorsList = () => {
     const [doctors, setDoctors] = useState<any[]>([])
@@ -31,19 +32,24 @@ const DoctorsList = () => {
     }, [])
 
     return (
-        <div className='m-5 max-h-[90vh] overflow-y-scroll'>
-            <h1 className='text-lg font-medium'>All Doctors</h1>
-            <div className='w-full flex flex-wrap gap-4 pt-5 gap-y-6'>
+        <div className='max-w-6xl'>
+            <h1 className='text-2xl font-bold text-gray-900 mb-1'>All Doctors</h1>
+            <p className='text-gray-500 mb-6'>Toggle availability for platform-wide bookings.</p>
+
+            <div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4'>
                 {doctors.map((item, index) => (
-                    <div className='border border-indigo-200 rounded-xl max-w-56 overflow-hidden cursor-pointer group' key={index}>
-                        <img className='bg-indigo-50 group-hover:bg-primary transition-all duration-500' src={item.image} alt="" />
+                    <div className='bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300' key={item.id ?? index}>
+                        <img className='w-full h-36 object-cover bg-blue-50' src={item.image || "/assets/profile_pic.png"} alt="" />
                         <div className='p-4'>
-                            <p className='text-neutral-800 text-lg font-medium'>{item.name}</p>
-                            <p className='text-zinc-600 text-sm'>{item.speciality}</p>
-                            <div className='mt-2 flex items-center gap-1 text-sm'>
-                                <input onChange={() => handleAvailability(item.id)} type="checkbox" checked={item.available} />
-                                <p>Available</p>
-                            </div>
+                            <p className='text-gray-900 font-semibold truncate'>{item.name}</p>
+                            <p className='text-gray-400 text-xs mb-3 truncate'>{item.speciality}</p>
+                            <button
+                                onClick={() => handleAvailability(item.id)}
+                                className={`w-full flex items-center justify-between px-3 py-2 rounded-xl border text-xs font-semibold transition-colors ${item.available ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-gray-50 border-gray-100 text-gray-500'}`}
+                            >
+                                {item.available ? 'Available' : 'Unavailable'}
+                                {item.available ? <ToggleRight className='w-6 h-6 text-emerald-500' /> : <ToggleLeft className='w-6 h-6 text-gray-400' />}
+                            </button>
                         </div>
                     </div>
                 ))}

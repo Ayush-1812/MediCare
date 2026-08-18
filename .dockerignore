@@ -1,0 +1,25 @@
+.git
+.gitignore
+node_modules
+.next
+out
+
+# Environment files — never bake local secrets into an image
+.env
+.env.local
+.env*.local
+server/.env
+
+# Docs and non-runtime files
+README.md
+PROJECT_DOCUMENTATION.md
+*.md
+
+# Editor/OS cruft
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Local-only data / scripts
+data

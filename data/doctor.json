@@ -1,0 +1,542 @@
+[
+    {
+        "name": "Dr. Aarav Sharma",
+        "specialization": "General Physician",
+        "qualification": "MBBS, MD (Internal Medicine)",
+        "experience": 12,
+        "hospital": "Apollo Hospital",
+        "city": "New Delhi",
+        "consultationFee": 600,
+        "rating": 4.9,
+        "totalReviews": 1284,
+        "languages": [
+            "English",
+            "Hindi"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Mon",
+            "Tue",
+            "Wed",
+            "Thu",
+            "Fri"
+        ],
+        "image": "/doctors/aarav-sharma.jpg",
+        "about": "Experienced physician specializing in preventive healthcare and chronic disease management."
+    },
+    {
+        "name": "Dr. Priya Mehta",
+        "specialization": "Cardiologist",
+        "qualification": "MBBS, MD, DM (Cardiology)",
+        "experience": 15,
+        "hospital": "Fortis Hospital",
+        "city": "Mumbai",
+        "consultationFee": 1200,
+        "rating": 4.8,
+        "totalReviews": 1543,
+        "languages": [
+            "English",
+            "Hindi",
+            "Marathi"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Mon",
+            "Wed",
+            "Fri",
+            "Sat"
+        ],
+        "image": "/doctors/priya-mehta.jpg",
+        "about": "Specialist in heart diseases, hypertension, and preventive cardiology."
+    },
+    {
+        "name": "Dr. Rohan Kapoor",
+        "specialization": "Neurologist",
+        "qualification": "MBBS, MD, DM (Neurology)",
+        "experience": 14,
+        "hospital": "Max Healthcare",
+        "city": "New Delhi",
+        "consultationFee": 1300,
+        "rating": 4.9,
+        "totalReviews": 1198,
+        "languages": [
+            "English",
+            "Hindi"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Tue",
+            "Thu",
+            "Sat"
+        ],
+        "image": "/doctors/rohan-kapoor.jpg",
+        "about": "Expert in stroke, epilepsy, migraine, and neurological disorders."
+    },
+    {
+        "name": "Dr. Ananya Iyer",
+        "specialization": "Dermatologist",
+        "qualification": "MBBS, MD (Dermatology)",
+        "experience": 10,
+        "hospital": "Manipal Hospital",
+        "city": "Bengaluru",
+        "consultationFee": 700,
+        "rating": 4.8,
+        "totalReviews": 965,
+        "languages": [
+            "English",
+            "Hindi",
+            "Kannada"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Mon",
+            "Tue",
+            "Thu",
+            "Fri"
+        ],
+        "image": "/doctors/ananya-iyer.jpg",
+        "about": "Specializes in skin, hair, nail disorders, and cosmetic dermatology."
+    },
+    {
+        "name": "Dr. Vivek Nair",
+        "specialization": "Orthopedic",
+        "qualification": "MBBS, MS (Orthopedics)",
+        "experience": 16,
+        "hospital": "Aster CMI Hospital",
+        "city": "Bengaluru",
+        "consultationFee": 1000,
+        "rating": 4.7,
+        "totalReviews": 1102,
+        "languages": [
+            "English",
+            "Hindi",
+            "Malayalam"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Mon",
+            "Wed",
+            "Fri"
+        ],
+        "image": "/doctors/vivek-nair.jpg",
+        "about": "Expert in joint replacement, fractures, sports injuries, and arthritis."
+    },
+    {
+        "name": "Dr. Sneha Kulkarni",
+        "specialization": "Gynecologist",
+        "qualification": "MBBS, MS (Obstetrics & Gynecology)",
+        "experience": 13,
+        "hospital": "Kokilaben Hospital",
+        "city": "Mumbai",
+        "consultationFee": 900,
+        "rating": 4.9,
+        "totalReviews": 1670,
+        "languages": [
+            "English",
+            "Hindi",
+            "Marathi"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Mon",
+            "Tue",
+            "Thu",
+            "Sat"
+        ],
+        "image": "/doctors/sneha-kulkarni.jpg",
+        "about": "Provides comprehensive women's healthcare, pregnancy care, and fertility consultation."
+    },
+    {
+        "name": "Dr. Karan Malhotra",
+        "specialization": "Pediatrician",
+        "qualification": "MBBS, MD (Pediatrics)",
+        "experience": 11,
+        "hospital": "Rainbow Children's Hospital",
+        "city": "Hyderabad",
+        "consultationFee": 700,
+        "rating": 4.8,
+        "totalReviews": 1055,
+        "languages": [
+            "English",
+            "Hindi",
+            "Telugu"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Mon",
+            "Tue",
+            "Wed",
+            "Fri"
+        ],
+        "image": "/doctors/karan-malhotra.jpg",
+        "about": "Specializes in newborn care, childhood illnesses, and vaccination."
+    },
+    {
+        "name": "Dr. Neha Choudhary",
+        "specialization": "Ophthalmologist",
+        "qualification": "MBBS, MS (Ophthalmology)",
+        "experience": 9,
+        "hospital": "Sankara Nethralaya",
+        "city": "Chennai",
+        "consultationFee": 650,
+        "rating": 4.7,
+        "totalReviews": 874,
+        "languages": [
+            "English",
+            "Hindi",
+            "Tamil"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Tue",
+            "Thu",
+            "Fri"
+        ],
+        "image": "/doctors/neha-choudhary.jpg",
+        "about": "Experienced in cataract surgery, glaucoma treatment, and vision care."
+    },
+    {
+        "name": "Dr. Rahul Verma",
+        "specialization": "ENT Specialist",
+        "qualification": "MBBS, MS (ENT)",
+        "experience": 10,
+        "hospital": "Medanta",
+        "city": "Gurugram",
+        "consultationFee": 750,
+        "rating": 4.8,
+        "totalReviews": 942,
+        "languages": [
+            "English",
+            "Hindi"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Mon",
+            "Wed",
+            "Sat"
+        ],
+        "image": "/doctors/rahul-verma.jpg",
+        "about": "Treats ear, nose, throat disorders and sinus-related conditions."
+    },
+    {
+        "name": "Dr. Meera Joshi",
+        "specialization": "Psychiatrist",
+        "qualification": "MBBS, MD (Psychiatry)",
+        "experience": 12,
+        "hospital": "AIIMS",
+        "city": "New Delhi",
+        "consultationFee": 900,
+        "rating": 4.9,
+        "totalReviews": 1220,
+        "languages": [
+            "English",
+            "Hindi"
+        ],
+        "consultationModes": [
+            "Video Consultation",
+            "In-Person"
+        ],
+        "availability": [
+            "Tue",
+            "Thu",
+            "Fri"
+        ],
+        "image": "/doctors/meera-joshi.jpg",
+        "about": "Specializes in anxiety, depression, stress management, and behavioral therapy."
+    },
+    {
+        "name": "Dr. Aditya Singh",
+        "specialization": "Gastroenterologist",
+        "qualification": "MBBS, MD, DM (Gastroenterology)",
+        "experience": 17,
+        "hospital": "Medanta",
+        "city": "Gurugram",
+        "consultationFee": 1400,
+        "rating": 4.8,
+        "totalReviews": 1328,
+        "languages": [
+            "English",
+            "Hindi"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Mon",
+            "Thu",
+            "Sat"
+        ],
+        "image": "/doctors/aditya-singh.jpg",
+        "about": "Expert in digestive disorders, liver diseases, and endoscopy."
+    },
+    {
+        "name": "Dr. Kavya Reddy",
+        "specialization": "Endocrinologist",
+        "qualification": "MBBS, MD, DM (Endocrinology)",
+        "experience": 13,
+        "hospital": "Yashoda Hospital",
+        "city": "Hyderabad",
+        "consultationFee": 1100,
+        "rating": 4.8,
+        "totalReviews": 1095,
+        "languages": [
+            "English",
+            "Hindi",
+            "Telugu"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Mon",
+            "Wed",
+            "Fri"
+        ],
+        "image": "/doctors/kavya-reddy.jpg",
+        "about": "Specializes in diabetes, thyroid disorders, and hormonal conditions."
+    },
+    {
+        "name": "Dr. Arjun Patel",
+        "specialization": "Urologist",
+        "qualification": "MBBS, MS, MCh (Urology)",
+        "experience": 15,
+        "hospital": "Sterling Hospital",
+        "city": "Ahmedabad",
+        "consultationFee": 1000,
+        "rating": 4.7,
+        "totalReviews": 985,
+        "languages": [
+            "English",
+            "Hindi",
+            "Gujarati"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Tue",
+            "Thu",
+            "Sat"
+        ],
+        "image": "/doctors/arjun-patel.jpg",
+        "about": "Experienced in kidney stones, prostate disorders, and urinary tract diseases."
+    },
+    {
+        "name": "Dr. Ishita Banerjee",
+        "specialization": "Pulmonologist",
+        "qualification": "MBBS, MD (Pulmonology)",
+        "experience": 12,
+        "hospital": "Ruby General Hospital",
+        "city": "Kolkata",
+        "consultationFee": 900,
+        "rating": 4.8,
+        "totalReviews": 1034,
+        "languages": [
+            "English",
+            "Hindi",
+            "Bengali"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Mon",
+            "Wed",
+            "Fri"
+        ],
+        "image": "/doctors/ishita-banerjee.jpg",
+        "about": "Specializes in asthma, COPD, lung infections, and respiratory diseases."
+    },
+    {
+        "name": "Dr. Sandeep Deshmukh",
+        "specialization": "Oncologist",
+        "qualification": "MBBS, MD, DM (Oncology)",
+        "experience": 18,
+        "hospital": "Tata Memorial Hospital",
+        "city": "Mumbai",
+        "consultationFee": 1500,
+        "rating": 4.9,
+        "totalReviews": 1712,
+        "languages": [
+            "English",
+            "Hindi",
+            "Marathi"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Tue",
+            "Thu",
+            "Sat"
+        ],
+        "image": "/doctors/sandeep-deshmukh.jpg",
+        "about": "Expert in medical oncology, chemotherapy, and cancer management."
+    },
+    {
+        "name": "Dr. Pooja Sinha",
+        "specialization": "Dentist",
+        "qualification": "BDS, MDS",
+        "experience": 8,
+        "hospital": "Clove Dental",
+        "city": "Jaipur",
+        "consultationFee": 500,
+        "rating": 4.7,
+        "totalReviews": 843,
+        "languages": [
+            "English",
+            "Hindi"
+        ],
+        "consultationModes": [
+            "In-Person"
+        ],
+        "availability": [
+            "Mon",
+            "Tue",
+            "Wed",
+            "Fri"
+        ],
+        "image": "/doctors/pooja-sinha.jpg",
+        "about": "Provides preventive, cosmetic, and restorative dental care."
+    },
+    {
+        "name": "Dr. Nitin Agarwal",
+        "specialization": "Nephrologist",
+        "qualification": "MBBS, MD, DM (Nephrology)",
+        "experience": 16,
+        "hospital": "Apollo Hospital",
+        "city": "Chennai",
+        "consultationFee": 1200,
+        "rating": 4.8,
+        "totalReviews": 1190,
+        "languages": [
+            "English",
+            "Hindi",
+            "Tamil"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Mon",
+            "Thu",
+            "Fri"
+        ],
+        "image": "/doctors/nitin-agarwal.jpg",
+        "about": "Expert in kidney diseases, dialysis, and hypertension management."
+    },
+    {
+        "name": "Dr. Shreya Bose",
+        "specialization": "Rheumatologist",
+        "qualification": "MBBS, MD, DM (Rheumatology)",
+        "experience": 11,
+        "hospital": "Fortis Hospital",
+        "city": "Kolkata",
+        "consultationFee": 950,
+        "rating": 4.7,
+        "totalReviews": 912,
+        "languages": [
+            "English",
+            "Hindi",
+            "Bengali"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Tue",
+            "Thu",
+            "Sat"
+        ],
+        "image": "/doctors/shreya-bose.jpg",
+        "about": "Treats arthritis, lupus, autoimmune disorders, and joint diseases."
+    },
+    {
+        "name": "Dr. Manish Tiwari",
+        "specialization": "General Surgeon",
+        "qualification": "MBBS, MS (General Surgery)",
+        "experience": 18,
+        "hospital": "Narayana Health",
+        "city": "Bengaluru",
+        "consultationFee": 1100,
+        "rating": 4.8,
+        "totalReviews": 1356,
+        "languages": [
+            "English",
+            "Hindi"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Mon",
+            "Wed",
+            "Fri"
+        ],
+        "image": "/doctors/manish-tiwari.jpg",
+        "about": "Experienced in laparoscopic and minimally invasive surgeries."
+    },
+    {
+        "name": "Dr. Ritu Arora",
+        "specialization": "Obstetrician",
+        "qualification": "MBBS, MS (Obstetrics & Gynecology)",
+        "experience": 14,
+        "hospital": "Cloudnine Hospital",
+        "city": "Chandigarh",
+        "consultationFee": 850,
+        "rating": 4.9,
+        "totalReviews": 1475,
+        "languages": [
+            "English",
+            "Hindi",
+            "Punjabi"
+        ],
+        "consultationModes": [
+            "In-Person",
+            "Video Consultation"
+        ],
+        "availability": [
+            "Mon",
+            "Tue",
+            "Thu",
+            "Sat"
+        ],
+        "image": "/doctors/ritu-arora.jpg",
+        "about": "Specializes in pregnancy care, high-risk deliveries, and maternal health."
+    }
+]

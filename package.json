@@ -22,6 +22,7 @@
     "prisma": "^5.22.0",
     "react": "19.2.3",
     "react-dom": "19.2.3",
+    "react-markdown": "^10.1.0",
     "react-toastify": "^11.0.5",
     "string-similarity": "^4.0.4",
     "tailwind-merge": "^3.4.0",
