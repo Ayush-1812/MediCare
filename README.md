@@ -148,6 +148,7 @@ Streaming to UI
 ### Deployment
 - Vercel
 - Supabase
+- Docker
 
 ---
 
@@ -165,16 +166,67 @@ npx prisma db push
 npm run dev
 ```
 
-Create a `.env` file:
+Create a `.env` file (see [`.env.example`](./.env.example) for a ready-to-copy template):
 
 ```env
+# Database (Supabase PostgreSQL)
 DATABASE_URL=
 DIRECT_URL=
+
+# Authentication
 JWT_SECRET=
+
+# AI
 GEMINI_API_KEY=
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
+
+# Image storage (profile photos, prescription uploads)
+CLOUDINARY_CLOUD_NAME=
+CLOUDINARY_API_KEY=
+CLOUDINARY_API_SECRET=
+
+# Nearby pharmacy search
+SERPAPI_KEY=
+
+# Seeded admin login
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
 ```
+
+---
+
+# 🐳 Running with Docker
+
+The app also ships with a multi-stage `Dockerfile` and a `docker-compose.yml` that runs
+it alongside its own local PostgreSQL container — no Supabase account needed to try it.
+
+```bash
+# 1. Copy the env template and fill in at least JWT_SECRET, GEMINI_API_KEY, ADMIN_PASSWORD
+cp .env.example .env
+
+# 2. Build and start both containers
+docker compose up --build
+```
+
+On first boot, the `app` container automatically runs `prisma db push` against the
+bundled Postgres before starting Next.js, so the schema is ready with no manual step.
+Visit **http://localhost:3000**.
+
+```bash
+docker compose down        # stop the stack
+docker compose down -v     # stop and also wipe the local database volume
+docker compose logs -f app # tail app logs
+```
+
+**Notes:**
+- `DATABASE_URL`/`DIRECT_URL` are set inside `docker-compose.yml` to point at the
+  bundled `postgres` service — values in your `.env` for those two are ignored by
+  Docker Compose on purpose, so this stack can never accidentally touch a real
+  Supabase database.
+- `CLOUDINARY_*` and `SERPAPI_KEY` are optional for basic local testing (profile-photo
+  upload, prescription upload, and the pharmacy finder simply won't work without them).
+- The auto `prisma db push` on boot only runs because `docker-compose.yml` sets
+  `RUN_DB_PUSH=true` — it's off by default in the raw `Dockerfile`, so pointing the
+  image at an external database elsewhere never silently changes its schema.
 
 ---
 
@@ -201,13 +253,13 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=
 
 - ✅ Appointment Intelligence
 - ✅ Symptom Assessment
+- ✅ Docker Support
 - 🔄 Prescription Intelligence
 - 🔄 Medical Report Intelligence
 - 🔄 Health Summary
 - 🔄 Timeline Intelligence
 - 🔄 Multi-tool AI Reasoning
 - 🔄 Dark Mode
-- 🔄 Docker Support
 
 ---
 ## 🏗️ MediCare System Architecture
@@ -277,6 +329,11 @@ VideoCall --> VideoAPI[Video Call Service]
 
 Pharmacy --> Maps[Google Maps API]
 ```
+
+---
+
+> 📘 For the complete technical deep-dive, see [PROJECT_DOCUMENTATION.md](./PROJECT_DOCUMENTATION.md)
+
 ## 👨‍💻 Author
 
 **Ayush Carpenter**
@@ -284,4 +341,3 @@ Pharmacy --> Maps[Google Maps API]
 If you found this project helpful, consider giving it a ⭐ on GitHub!
 
 [Recording 2026-07-06 124619.zip](https://github.com/user-attachments/files/29691558/Recording.2026-07-06.124619.zip)
-

@@ -5,11 +5,12 @@ import { AppContext } from '@/context/AppContext'
 import { cancelAppointment, listAppointments } from '@/app/actions/userActions'
 import { toast } from 'react-toastify'
 import { useRouter } from 'next/navigation'
-import { getMeetingId } from '@/app/actions/doctorActions'
+import { CalendarDays, MapPin, Video, XCircle, CheckCircle2, CreditCard } from 'lucide-react'
 
 const MyAppointments = () => {
     const { token } = useContext(AppContext)
     const [appointments, setAppointments] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
     const router = useRouter()
 
     const getAppointments = async () => {
@@ -20,6 +21,8 @@ const MyAppointments = () => {
             }
         } catch (error: any) {
             toast.error(error.message)
+        } finally {
+            setLoading(false)
         }
     }
 
@@ -44,51 +47,85 @@ const MyAppointments = () => {
     }, [token])
 
     return (
-        <div>
-            <p className='pb-3 mt-12 font-medium text-zinc-700 border-b italic'>My Appointments</p>
-            <div>
-                {appointments.map((item, index) => (
-                    <div className='grid grid-cols-[1fr_2fr] gap-4 sm:flex sm:gap-6 py-2 border-b' key={index}>
-                        <div>
-                            {/* <img className='w-32 bg-indigo-50' src={item.docData.image} alt="" /> */}
-                            {item.docData.image && (
+        <div className='min-h-screen pb-16'>
+            <div className='mt-8 mb-6'>
+                <h1 className='text-2xl sm:text-3xl font-bold text-gray-900'>My Appointments</h1>
+                <p className='text-gray-500 mt-1'>Track your upcoming and past consultations.</p>
+            </div>
+
+            {loading ? (
+                <div className='flex items-center gap-2 text-primary font-medium py-16 justify-center'>
+                    <span className='w-2 h-2 bg-primary rounded-full animate-bounce'></span>
+                    <span className='w-2 h-2 bg-primary rounded-full animate-bounce' style={{ animationDelay: '0.15s' }}></span>
+                    <span className='w-2 h-2 bg-primary rounded-full animate-bounce' style={{ animationDelay: '0.3s' }}></span>
+                </div>
+            ) : appointments.length === 0 ? (
+                <div className='flex flex-col items-center justify-center text-center py-20 bg-blue-50/40 rounded-3xl border border-dashed border-blue-100'>
+                    <CalendarDays className='w-10 h-10 text-blue-300 mb-3' />
+                    <p className='text-gray-600 font-medium'>You have no appointments yet.</p>
+                    <button onClick={() => router.push('/doctors')} className='mt-4 bg-primary text-white px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all'>
+                        Find a Doctor
+                    </button>
+                </div>
+            ) : (
+                <div className='flex flex-col gap-4'>
+                    {appointments.map((item, index) => (
+                        <div className='bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 p-5 flex flex-col sm:flex-row gap-5' key={item.id ?? index}>
+                            {item.docData?.image && (
                                 <img
-                                    className="w-32 bg-indigo-50"
+                                    className="w-full sm:w-32 h-32 rounded-xl object-cover bg-blue-50 shrink-0"
                                     src={item.docData.image}
                                     alt={item.docData.name || "Doctor"}
                                 />
                             )}
 
+                            <div className='flex-1 min-w-0'>
+                                <p className='text-gray-900 font-bold text-lg'>{item.docData?.name}</p>
+                                <p className='text-primary text-sm font-medium mb-2'>{item.docData?.speciality}</p>
+
+                                {(item.docData?.address?.line1 || item.docData?.address?.line2) && (
+                                    <p className='text-sm text-gray-500 flex items-start gap-1.5 mb-1.5'>
+                                        <MapPin className='w-4 h-4 shrink-0 mt-0.5 text-gray-400' />
+                                        <span>{item.docData?.address?.line1}{item.docData?.address?.line1 && item.docData?.address?.line2 ? ', ' : ''}{item.docData?.address?.line2}</span>
+                                    </p>
+                                )}
+
+                                <p className='text-sm text-gray-600 flex items-center gap-1.5 font-medium'>
+                                    <CalendarDays className='w-4 h-4 text-gray-400' /> {item.slotDate} &middot; {item.slotTime}
+                                </p>
+                            </div>
+
+                            <div className='flex sm:flex-col gap-2 justify-center sm:min-w-[190px]'>
+                                {!item.cancelled && !item.isCompleted && item.payment && (
+                                    <span className='flex items-center justify-center gap-1.5 py-2.5 border border-emerald-200 bg-emerald-50 rounded-xl text-emerald-600 text-sm font-semibold'>
+                                        <CreditCard className='w-4 h-4' /> Paid
+                                    </span>
+                                )}
+                                {!item.cancelled && !item.isCompleted && item.meetingId && (
+                                    <button onClick={() => router.push(`/video-call/${item.id}`)} className='flex items-center justify-center gap-1.5 text-sm text-white text-center py-2.5 rounded-xl bg-primary hover:bg-primary/90 hover:-translate-y-0.5 transition-all shadow-sm font-semibold'>
+                                        <Video className='w-4 h-4' /> Join Video Call
+                                    </button>
+                                )}
+                                {!item.cancelled && !item.isCompleted && (
+                                    <button onClick={() => handleCancelAppointment(item.id)} className='flex items-center justify-center gap-1.5 text-sm text-gray-500 text-center py-2.5 rounded-xl border border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-semibold'>
+                                        <XCircle className='w-4 h-4' /> Cancel Appointment
+                                    </button>
+                                )}
+                                {item.cancelled && !item.isCompleted && (
+                                    <span className='flex items-center justify-center gap-1.5 py-2.5 border border-red-200 bg-red-50 rounded-xl text-red-500 text-sm font-semibold'>
+                                        <XCircle className='w-4 h-4' /> Cancelled
+                                    </span>
+                                )}
+                                {item.isCompleted && (
+                                    <span className='flex items-center justify-center gap-1.5 py-2.5 border border-emerald-200 bg-emerald-50 rounded-xl text-emerald-600 text-sm font-semibold'>
+                                        <CheckCircle2 className='w-4 h-4' /> Completed
+                                    </span>
+                                )}
+                            </div>
                         </div>
-                        <div className='flex-1 text-sm text-zinc-600'>
-                            <p className='text-neutral-800 font-semibold'>{item.docData?.name}</p>
-                            <p>{item.docData?.speciality}</p>
-                            <p className='text-zinc-700 font-medium mt-1'>Address:</p>
-                            <p className='text-xs'>{item.docData?.address?.line1}</p>
-                            <p className='text-xs'>{item.docData?.address?.line2}</p>
-                            <p className='text-sm mt-1'><span className='text-sm text-neutral-700 font-medium'>Date & Time:</span> {item.slotDate} | {item.slotTime}</p>
-                        </div>
-                        <div></div>
-                        <div className='flex flex-col gap-2 justify-end'>
-                            {!item.cancelled && !item.isCompleted && item.payment && (
-                                <button className='sm:min-w-48 py-2 border border-green-500 rounded text-green-500'>Paid</button>
-                            )}
-                            {!item.cancelled && !item.isCompleted && item.meetingId && (
-                                <button onClick={() => router.push(`/video-call/${item.id}`)} className='text-sm text-white text-center sm:min-w-48 py-2 border rounded bg-primary hover:opacity-90 transition-all duration-300'>Join Video Call</button>
-                            )}
-                            {!item.cancelled && !item.isCompleted && (
-                                <button onClick={() => handleCancelAppointment(item.id)} className='text-sm text-stone-500 text-center sm:min-w-48 py-2 border rounded hover:bg-red-600 hover:text-white transition-all duration-300'>Cancel Appointment</button>
-                            )}
-                            {item.cancelled && !item.isCompleted && (
-                                <button className='sm:min-w-48 py-2 border border-red-500 rounded text-red-500'>Appointment Cancelled</button>
-                            )}
-                            {item.isCompleted && (
-                                <button className='sm:min-w-48 py-2 border border-green-500 rounded text-green-500'>Completed</button>
-                            )}
-                        </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            )}
         </div>
     )
 }

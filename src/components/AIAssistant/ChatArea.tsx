@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowDown } from 'lucide-react';
+import { ArrowDown, Menu } from 'lucide-react';
 import MessageBubble, { MessageProps } from './MessageBubble';
 import ChatInput from './ChatInput';
 import EmptyState from './EmptyState';
@@ -9,9 +9,10 @@ import EmptyState from './EmptyState';
 interface ChatAreaProps {
   activeId: string | null;
   onConversationCreated: (id: string) => void;
+  onOpenSidebar?: () => void;
 }
 
-const ChatArea: React.FC<ChatAreaProps> = ({ activeId, onConversationCreated }) => {
+const ChatArea: React.FC<ChatAreaProps> = ({ activeId, onConversationCreated, onOpenSidebar }) => {
   const [messages, setMessages] = useState<MessageProps[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
@@ -22,10 +23,18 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeId, onConversationCreated }) 
   
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Set right before we tell the parent about a conversation id we just created ourselves —
+  // lets the [activeId] effect below skip its history refetch, since local state already has
+  // the live (streaming) message and a refetch would just flash a spinner over it.
+  const skipNextHistoryFetchRef = useRef(false);
 
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior });
+    // Scroll only the message list itself, not `scrollIntoView` — this page's outer
+    // document can scroll too (navbar + full-height panel + footer), and `scrollIntoView`
+    // walks every scrollable ancestor, which was dragging the whole page down to the
+    // footer instead of staying inside the chat panel.
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior });
     }
   };
 
@@ -44,6 +53,11 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeId, onConversationCreated }) 
       setMessages([]); // New Chat
       setIsAutoScrollEnabled(true);
       setShowScrollButton(false);
+      return;
+    }
+
+    if (skipNextHistoryFetchRef.current) {
+      skipNextHistoryFetchRef.current = false;
       return;
     }
 
@@ -131,6 +145,7 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeId, onConversationCreated }) 
 
       const newConvId = res.headers.get('X-Conversation-Id');
       if (newConvId && !activeId) {
+        skipNextHistoryFetchRef.current = true;
         onConversationCreated(newConvId);
       }
 
@@ -165,12 +180,21 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeId, onConversationCreated }) 
   return (
     <div className="flex-1 flex flex-col relative h-full w-full overflow-hidden">
       {/* Header (Fixed at top) */}
-      <div className="flex-shrink-0 flex items-center justify-between p-6 pb-4 lg:p-8 lg:pb-6 border-b border-white/20 bg-transparent z-20">
-        <div>
-          <h2 className="text-3xl font-black text-slate-800 tracking-tight">Aether AI</h2>
-          <p className="text-sm text-slate-500 font-medium mt-1">Your Personal Healthcare Intelligence</p>
+      <div className="flex-shrink-0 flex items-center justify-between gap-3 p-4 sm:p-6 pb-4 lg:p-8 lg:pb-6 border-b border-white/20 bg-transparent z-20">
+        <div className="flex items-center gap-3 min-w-0">
+          <button
+            onClick={onOpenSidebar}
+            className="lg:hidden p-2 -ml-1 rounded-xl bg-white/60 hover:bg-white text-slate-600 border border-white/70 shadow-sm transition-colors shrink-0"
+            aria-label="Open conversations"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="min-w-0">
+            <h2 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight truncate">Aether AI</h2>
+            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1 hidden sm:block">Your Personal Healthcare Intelligence</p>
+          </div>
         </div>
-        <div className="hidden sm:flex items-center gap-2.5 bg-white/50 backdrop-blur-md px-4 py-2 rounded-full border border-white/60 shadow-sm">
+        <div className="hidden sm:flex items-center gap-2.5 bg-white/50 backdrop-blur-md px-4 py-2 rounded-full border border-white/60 shadow-sm shrink-0">
           <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
           <span className="text-xs font-bold text-green-700 tracking-wide uppercase">System Active</span>
         </div>
