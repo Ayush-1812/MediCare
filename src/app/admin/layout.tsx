@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { LayoutDashboard, CalendarClock, UserPlus, Users } from 'lucide-react'
 import DashboardShell from '@/components/dashboard/DashboardShell'
+import { logoutAdmin } from '@/app/actions/adminActions'
 
 const navItems = [
     { href: '/admin/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -25,7 +26,9 @@ const AdminLayout = ({ children }: { children: React.ReactNode }) => {
         setChecked(true)
     }, [pathname, router])
 
-    const logout = () => {
+    const logout = async () => {
+        // Clearing only localStorage left the httpOnly admin cookie in place.
+        await logoutAdmin()
         localStorage.removeItem('adminToken')
         router.push('/admin/login')
     }

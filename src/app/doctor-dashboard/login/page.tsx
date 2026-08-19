@@ -1,30 +1,46 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useContext, useState } from 'react'
 import { loginDoctor } from '@/app/actions/doctorActions'
 import { toast } from 'react-toastify'
 import { useRouter } from 'next/navigation'
 import { Mail, Lock, Stethoscope } from 'lucide-react'
+import { AppContext } from '@/context/AppContext'
 
 const DoctorLogin = () => {
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
+    const [submitting, setSubmitting] = useState(false)
+    const { setDocToken } = useContext(AppContext)
     const router = useRouter()
 
     const onSubmitHandler = async (event: React.FormEvent) => {
         event.preventDefault()
+        if (submitting) return
+
         const formData = new FormData()
         formData.append('email', email)
         formData.append('password', password)
 
-        const res = await loginDoctor(formData)
-        if (res.success && res.token) {
-            localStorage.setItem('docToken', res.token)
-            toast.success('Login Successful')
-            router.push('/doctor-dashboard/dashboard')
-        } else {
-            toast.error(res.message)
+        setSubmitting(true)
+        let res
+        try {
+            res = await loginDoctor(formData)
+        } finally {
+            setSubmitting(false)
         }
+
+        if (!res.success) {
+            toast.error(res.message)
+            return
+        }
+
+        localStorage.setItem('docToken', res.token)
+        // Without this the navbar and dashboard shell never learn about the session,
+        // because they read the doctor from context, not from localStorage.
+        setDocToken(res.token)
+        toast.success('Login Successful')
+        router.push(res.profileCompleted ? '/' : '/doctor-dashboard/onboarding')
     }
 
     return (
@@ -53,8 +69,8 @@ const DoctorLogin = () => {
                             <input className='pl-11 pr-4 py-3 w-full border border-gray-200 rounded-xl bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all outline-none text-gray-800' type="password" onChange={(e) => setPassword(e.target.value)} value={password} required />
                         </div>
                     </div>
-                    <button type='submit' className='w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 mt-2'>
-                        Sign In
+                    <button type='submit' disabled={submitting} className='w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 mt-2'>
+                        {submitting ? 'Signing in...' : 'Sign In'}
                     </button>
                 </div>
 

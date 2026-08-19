@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { AppContext } from '../context/AppContext'
 import { Sparkles, ChevronDown, LayoutDashboard, CalendarDays, LogOut, X, Menu } from 'lucide-react'
+import { avatarFor } from '@/lib/avatar'
 
 const Navbar = () => {
     const router = useRouter()
@@ -18,16 +19,16 @@ const Navbar = () => {
 
     const isLoggedIn = Boolean(token || docToken)
 
-    const logout = () => {
-        context?.logoutUser?.()
-        router.push('/login')
+    const logout = async () => {
         setShowMenu(false)
+        await context?.logoutUser?.()
+        router.push('/login')
     }
 
-    const doctorLogout = () => {
-        context?.logoutDoctor?.()
-        router.push('/login')
+    const doctorLogout = async () => {
         setShowMenu(false)
+        await context?.logoutDoctor?.()
+        router.push('/login')
     }
 
     const navLinks = [
@@ -77,7 +78,7 @@ const Navbar = () => {
                 <div className='flex items-center gap-3'>
                     {token ? (
                         <div className='hidden md:flex items-center gap-2 cursor-pointer group relative py-2'>
-                            <img className='w-9 h-9 rounded-full object-cover ring-2 ring-blue-50 group-hover:ring-primary/30 transition-all' src={userData?.image || "/assets/profile_pic.png"} alt="" />
+                            <img className='w-9 h-9 rounded-full object-cover ring-2 ring-blue-50 group-hover:ring-primary/30 transition-all' src={avatarFor(userData?.image, userData?.gender)} alt="" />
                             <ChevronDown className='w-4 h-4 text-gray-400 group-hover:rotate-180 transition-transform duration-300' />
                             <div className='absolute top-full right-0 pt-3 text-sm font-medium text-gray-600 z-20 opacity-0 invisible translate-y-1 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200'>
                                 <div className='min-w-56 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border border-gray-100 flex flex-col p-2 overflow-hidden'>
@@ -99,7 +100,7 @@ const Navbar = () => {
                         </div>
                     ) : docToken ? (
                         <div className='hidden md:flex items-center gap-2 cursor-pointer group relative py-2'>
-                            <img className='w-9 h-9 rounded-full object-cover ring-2 ring-blue-50 group-hover:ring-primary/30 transition-all bg-blue-100' src={doctorData?.image || "/assets/profile_pic.png"} alt="" />
+                            <img className='w-9 h-9 rounded-full object-cover ring-2 ring-blue-50 group-hover:ring-primary/30 transition-all bg-blue-100' src={avatarFor(doctorData?.image, doctorData?.gender)} alt="" />
                             <ChevronDown className='w-4 h-4 text-gray-400 group-hover:rotate-180 transition-transform duration-300' />
                             <div className='absolute top-full right-0 pt-3 text-sm font-medium text-gray-600 z-20 opacity-0 invisible translate-y-1 group-hover:opacity-100 group-hover:visible group-hover:translate-y-0 transition-all duration-200'>
                                 <div className='min-w-56 bg-white rounded-2xl shadow-[0_10px_40px_-10px_rgba(0,0,0,0.15)] border border-gray-100 flex flex-col p-2 overflow-hidden'>
@@ -157,7 +158,9 @@ const Navbar = () => {
                     <div className='flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-blue-50/50'>
                         <img
                             className='w-11 h-11 rounded-full object-cover bg-blue-100'
-                            src={(token ? userData?.image : doctorData?.image) || "/assets/profile_pic.png"}
+                            src={token
+                                ? avatarFor(userData?.image, userData?.gender)
+                                : avatarFor(doctorData?.image, doctorData?.gender)}
                             alt=""
                         />
                         <div className='min-w-0'>

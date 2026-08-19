@@ -1,10 +1,9 @@
 'use server'
 
 import prisma from '@/lib/prisma'
-import jwt from 'jsonwebtoken'
-import { cookies } from 'next/headers'
 import bcrypt from 'bcryptjs'
 import { v2 as cloudinary } from 'cloudinary'
+import { createSession, destroySession } from '@/lib/auth'
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -17,14 +16,21 @@ export async function loginAdmin(formData: FormData) {
         const email = formData.get('email') as string
         const password = formData.get('password') as string
 
-        if (email === process.env.ADMIN_EMAIL && password === process.env.ADMIN_PASSWORD) {
-            const token = jwt.sign(email + password, process.env.JWT_SECRET!)
-            const cookieStore = await cookies()
-            cookieStore.set('adminToken', token, { httpOnly: true, secure: true })
-            return { success: true, token }
-        } else {
+        const adminEmail = process.env.ADMIN_EMAIL
+        const adminPassword = process.env.ADMIN_PASSWORD
+        if (!adminEmail || !adminPassword) {
+            console.error('[loginAdmin] ADMIN_EMAIL / ADMIN_PASSWORD are not configured')
+            return { success: false, message: "Admin login is not configured" }
+        }
+
+        if (email !== adminEmail || password !== adminPassword) {
             return { success: false, message: "Invalid Credentials" }
         }
+
+        // The old token signed `email + password` as its payload — a JWT payload is only
+        // base64, so the admin password was readable straight out of the cookie.
+        const token = await createSession('admin', 'admin')
+        return { success: true, token }
     } catch (error: any) {
         console.error(error)
         return { success: false, message: error.message }
@@ -44,6 +50,19 @@ export async function addDoctor(formData: FormData) {
         const address = formData.get('address') as string
         const languages = formData.get('languages') as string
         const awards = formData.get('awards') as string
+        const gender = ((formData.get('gender') as string) ?? '').trim() || 'Not Selected'
+        const phone = ((formData.get('phone') as string) ?? '').trim()
+        const registrationNo = ((formData.get('registrationNo') as string) ?? '').trim()
+        const hospital = ((formData.get('hospital') as string) ?? '').trim()
+        const city = ((formData.get('city') as string) ?? '').trim()
+        const consultationModes = ((formData.get('consultationModes') as string) ?? 'Video Consultation')
+            .split(',').map((m) => m.trim()).filter(Boolean)
+        const availableDays = ((formData.get('availableDays') as string) ?? 'Mon,Tue,Wed,Thu,Fri')
+            .split(',').map((d) => d.trim()).filter(Boolean)
+        const slotStartTime = ((formData.get('slotStartTime') as string) ?? '').trim() || '10:00'
+        const slotEndTime = ((formData.get('slotEndTime') as string) ?? '').trim() || '17:00'
+        const parsedDuration = parseInt((formData.get('slotDuration') as string) ?? '', 10)
+        const slotDuration = Number.isFinite(parsedDuration) && parsedDuration > 0 ? parsedDuration : 30
         const imageFile = formData.get('image') as File
 
         if (!name || !email || !password || !speciality || !degree || !experience || !about || isNaN(fees) || !address || !imageFile) {
@@ -74,10 +93,21 @@ export async function addDoctor(formData: FormData) {
                 about,
                 languages,
                 awards,
+                gender,
+                phone,
+                registrationNo,
+                hospital,
+                city,
+                consultationModes,
+                availableDays,
+                slotStartTime,
+                slotEndTime,
+                slotDuration,
                 fees,
                 address: JSON.parse(address),
                 image: uploadResponse.secure_url,
-                slots_booked: {}
+                slots_booked: {},
+                profileCompleted: true
             }
         })
 
@@ -104,7 +134,15 @@ export async function allDoctors() {
                 fees: true,
                 address: true,
                 languages: true,
-                awards: true
+                awards: true,
+                gender: true,
+                hospital: true,
+                city: true,
+                registrationNo: true,
+                availableDays: true,
+                slotStartTime: true,
+                slotEndTime: true,
+                profileCompleted: true
             }
         })
         return { success: true, doctors }
@@ -133,9 +171,10 @@ export async function changeAvailability(docId: string) {
 export async function appointmentsAdmin() {
     try {
         const appointments = await prisma.appointment.findMany({
+            orderBy: { createdAt: 'desc' },
             include: {
-                user: { select: { name: true, image: true } },
-                doctor: { select: { name: true, image: true } }
+                user: { select: { name: true, image: true, gender: true } },
+                doctor: { select: { name: true, image: true, gender: true } }
             }
         })
         return { success: true, appointments }
@@ -154,8 +193,8 @@ export async function adminDashboard() {
             take: 5,
             orderBy: { createdAt: 'desc' },
             include: {
-                user: { select: { name: true, image: true } },
-                doctor: { select: { name: true, image: true } }
+                user: { select: { name: true, image: true, gender: true } },
+                doctor: { select: { name: true, image: true, gender: true } }
             }
         })
 
@@ -172,4 +211,9 @@ export async function adminDashboard() {
         console.error(error)
         return { success: false, message: error.message }
     }
+}
+
+export async function logoutAdmin() {
+    await destroySession('admin')
+    return { success: true }
 }

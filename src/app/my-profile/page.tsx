@@ -5,6 +5,7 @@ import { AppContext } from '@/context/AppContext'
 import { getProfile, updateProfile } from '@/app/actions/userActions'
 import { toast } from 'react-toastify'
 import { Mail, Phone, MapPin, User as UserIcon, Calendar, Droplet, Activity, FileText, ChevronRight, Bot, Ruler, Weight, HeartPulse, Sparkles, Plus, AlertCircle } from 'lucide-react'
+import { avatarFor } from '@/lib/avatar'
 
 const MyProfile = () => {
     const { token, userData, setUserData } = useContext(AppContext)
@@ -78,9 +79,7 @@ const MyProfile = () => {
                                             src={
                                                 image
                                                     ? URL.createObjectURL(image)
-                                                    : userData.image?.trim()
-                                                        ? userData.image
-                                                        : "/assets/profile_pic.png"
+                                                    : avatarFor(userData.image, userData.gender)
                                             }
                                             alt="Profile"
                                         />

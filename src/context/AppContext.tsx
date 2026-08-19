@@ -1,9 +1,8 @@
 'use client'
 
 import React, { createContext, useState, useEffect, useCallback } from 'react'
-import { doctorList } from '@/app/actions/doctorActions'
-import { doctorProfile } from '@/app/actions/doctorActions'
-import { getProfile } from '@/app/actions/userActions'
+import { doctorList, doctorProfile, logoutDoctor as logoutDoctorAction } from '@/app/actions/doctorActions'
+import { getProfile, logoutUser as logoutUserAction } from '@/app/actions/userActions'
 
 export const AppContext = createContext<any>(null)
 
@@ -15,12 +14,12 @@ const AppContextProvider = ({ children }: { children: React.ReactNode }) => {
     const [doctors, setDoctors] = useState<any[]>([])
     const [authReady, setAuthReady] = useState(false)
 
-    const getDoctorsData = async () => {
+    const getDoctorsData = useCallback(async () => {
         const res = await doctorList()
         if (res.success) {
-            setDoctors(res.doctors || [])
+            setDoctors(res.doctors)
         }
-    }
+    }, [])
 
     const getUserProfileData = useCallback(async () => {
         const res = await getProfile()
@@ -38,20 +37,16 @@ const AppContextProvider = ({ children }: { children: React.ReactNode }) => {
 
     useEffect(() => {
         getDoctorsData()
-    }, [])
+    }, [getDoctorsData])
 
-    // Persist token
+    // Restore whichever sessions this browser has. The tokens here are only a hint for
+    // the UI — the httpOnly cookie set at login is what actually authenticates every
+    // server action.
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const storedToken = localStorage.getItem('token')
-            const storedDocToken = localStorage.getItem('docToken')
-            if (storedToken) {
-                setToken(storedToken)
-            }
-            if (storedDocToken) {
-                setDocToken(storedDocToken)
-            }
-        }
+        const storedToken = localStorage.getItem('token')
+        const storedDocToken = localStorage.getItem('docToken')
+        if (storedToken) setToken(storedToken)
+        if (storedDocToken) setDocToken(storedDocToken)
         setAuthReady(true)
     }, [])
 
@@ -73,17 +68,21 @@ const AppContextProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, [docToken, getDoctorProfileData])
 
-    const logoutUser = () => {
+    // Both logouts must clear the httpOnly cookie too. Dropping only the localStorage
+    // copy left the server-side session alive, so "log out" logged nobody out.
+    const logoutUser = useCallback(async () => {
+        await logoutUserAction()
+        localStorage.removeItem('token')
         setToken(false)
         setUserData(null)
-        if (typeof window !== 'undefined') localStorage.removeItem('token')
-    }
+    }, [])
 
-    const logoutDoctor = () => {
+    const logoutDoctor = useCallback(async () => {
+        await logoutDoctorAction()
+        localStorage.removeItem('docToken')
         setDocToken(false)
         setDoctorData(null)
-        if (typeof window !== 'undefined') localStorage.removeItem('docToken')
-    }
+    }, [])
 
     const value = {
         token,
@@ -100,7 +99,7 @@ const AppContextProvider = ({ children }: { children: React.ReactNode }) => {
         getDoctorProfileData,
         logoutUser,
         logoutDoctor,
-        authReady
+        authReady,
     }
 
     return (

@@ -46,6 +46,29 @@ model Doctor {
   available    Boolean       @default(true)
   fees         Int?
   address      Json?
+
+  // --- Profile details patients rely on when choosing a doctor ---
+  gender            String?  @default("Not Selected")
+  phone             String?
+  registrationNo    String?
+  hospital          String?
+  city              String?
+  consultationModes Json     @default("[\"Video Consultation\"]")
+
+  // --- Consulting hours: which days, between what times, in what slot size ---
+  availableDays Json   @default("[\"Mon\",\"Tue\",\"Wed\",\"Thu\",\"Fri\"]")
+  slotStartTime String @default("10:00")
+  slotEndTime   String @default("17:00")
+  slotDuration  Int    @default(30)
+
+  rating       Float?
+  totalReviews Int    @default(0)
+
+  // Defaults to true so doctors that already exist (added by an admin, whose form
+  // already collects every field) stay visible. Self sign-up passes false explicitly,
+  // which holds the doctor in onboarding until they submit the profile form.
+  profileCompleted Boolean @default(true)
+
   createdAt    Int           @default(dbgenerated("extract(epoch from now())::int"))
   slots_booked Json          @default("{}")
   appointments Appointment[]

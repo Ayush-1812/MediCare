@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="Default avatar">
+  <defs>
+    <linearGradient id="nBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#eef2ff"/>
+      <stop offset="100%" stop-color="#e0e7ff"/>
+    </linearGradient>
+    <clipPath id="nClip"><circle cx="80" cy="80" r="80"/></clipPath>
+  </defs>
+  <g clip-path="url(#nClip)">
+    <rect width="160" height="160" fill="url(#nBg)"/>
+    <path d="M22 160c0-27 26-45 58-45s58 18 58 45z" fill="#64748b"/>
+    <circle cx="80" cy="68" r="30" fill="#94a3b8"/>
+  </g>
+</svg>

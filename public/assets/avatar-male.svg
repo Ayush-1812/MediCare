@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="Default male avatar">
+  <defs>
+    <linearGradient id="mBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e0f2fe"/>
+      <stop offset="100%" stop-color="#bae6fd"/>
+    </linearGradient>
+    <clipPath id="mClip"><circle cx="80" cy="80" r="80"/></clipPath>
+  </defs>
+  <g clip-path="url(#mClip)">
+    <rect width="160" height="160" fill="url(#mBg)"/>
+    <!-- shoulders -->
+    <path d="M20 160c0-28 27-46 60-46s60 18 60 46z" fill="#1d4ed8"/>
+    <path d="M64 118h32v14a16 16 0 0 1-32 0z" fill="#f4c9a8"/>
+    <!-- collar -->
+    <path d="M80 132 66 116l-8 4 22 22 22-22-8-4z" fill="#ffffff" opacity=".92"/>
+    <!-- head -->
+    <ellipse cx="80" cy="76" rx="30" ry="34" fill="#f8d6b8"/>
+    <!-- hair -->
+    <path d="M50 74c-2-24 12-38 30-38s32 14 30 38c-3-13-9-19-14-20-8 5-27 6-36 1-5 2-8 8-10 19z" fill="#3f3a36"/>
+    <!-- ears -->
+    <circle cx="49" cy="80" r="6" fill="#f4c9a8"/>
+    <circle cx="111" cy="80" r="6" fill="#f4c9a8"/>
+    <!-- eyes + brows -->
+    <ellipse cx="69" cy="76" rx="3.4" ry="4" fill="#3f3a36"/>
+    <ellipse cx="91" cy="76" rx="3.4" ry="4" fill="#3f3a36"/>
+    <path d="M62 66c4-3 9-3 13-1M85 65c4-2 9-2 13 1" stroke="#3f3a36" stroke-width="3" stroke-linecap="round" fill="none"/>
+    <!-- mouth -->
+    <path d="M71 93c5 5 13 5 18 0" stroke="#c98b6b" stroke-width="3" stroke-linecap="round" fill="none"/>
+  </g>
+</svg>

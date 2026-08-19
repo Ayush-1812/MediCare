@@ -3,7 +3,9 @@
 import React, { useEffect, useState } from 'react'
 import { doctorDashboard, appointmentComplete, appointmentCancelDoctor } from '@/app/actions/doctorActions'
 import { toast } from 'react-toastify'
-import { DollarSign, CalendarCheck, Users, ListChecks, Check, X, Clock } from 'lucide-react'
+import { IndianRupee, CalendarCheck, Users, ListChecks, Check, X, Clock } from 'lucide-react'
+import { formatINR } from '@/lib/currency'
+import { avatarFor } from '@/lib/avatar'
 
 const Dashboard = () => {
     const [dashData, setDashData] = useState<any>(null)
@@ -54,7 +56,7 @@ const Dashboard = () => {
     }
 
     const stats = [
-        { label: 'Earnings', value: `$${dashData.earnings}`, icon: DollarSign, color: 'from-emerald-500 to-teal-400' },
+        { label: 'Earnings', value: formatINR(dashData.earnings), icon: IndianRupee, color: 'from-emerald-500 to-teal-400' },
         { label: 'Appointments', value: dashData.appointments, icon: CalendarCheck, color: 'from-blue-600 to-indigo-500' },
         { label: 'Patients', value: dashData.patients, icon: Users, color: 'from-violet-500 to-fuchsia-400' },
     ]
@@ -89,7 +91,7 @@ const Dashboard = () => {
                         <p className='text-center text-gray-400 py-10 text-sm'>No bookings yet.</p>
                     ) : dashData.latestAppointments.map((item: any, index: number) => (
                         <div className='flex items-center px-6 py-4 gap-4 hover:bg-gray-50/70 transition-colors' key={index}>
-                            <img className='rounded-full w-11 h-11 object-cover bg-blue-50' src={item.user.image || "/assets/profile_pic.png"} alt="" />
+                            <img className='rounded-full w-11 h-11 object-cover bg-blue-50' src={avatarFor(item.user.image, item.user.gender)} alt="" />
                             <div className='flex-1 min-w-0 text-sm'>
                                 <p className='text-gray-800 font-semibold truncate'>{item.user.name}</p>
                                 <p className='text-gray-400 flex items-center gap-1.5 mt-0.5'><Clock className='w-3.5 h-3.5' /> {item.slotDate}, {item.slotTime}</p>

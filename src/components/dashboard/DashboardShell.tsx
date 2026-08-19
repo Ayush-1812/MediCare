@@ -4,6 +4,7 @@ import React, { useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { LogOut, Menu, X, LucideIcon } from 'lucide-react'
+import { avatarFor } from '@/lib/avatar'
 
 export interface DashboardNavItem {
     href: string
@@ -16,14 +17,17 @@ interface DashboardShellProps {
     navItems: DashboardNavItem[]
     onLogout: () => void
     avatarUrl?: string
+    /** Picks the male/female default avatar shown until a photo is uploaded. */
+    avatarGender?: string
     displayName?: string
     subLabel?: string
     children: React.ReactNode
 }
 
-const DashboardShell = ({ brandLabel, navItems, onLogout, avatarUrl, displayName, subLabel, children }: DashboardShellProps) => {
+const DashboardShell = ({ brandLabel, navItems, onLogout, avatarUrl, avatarGender, displayName, subLabel, children }: DashboardShellProps) => {
     const pathname = usePathname()
     const [mobileOpen, setMobileOpen] = useState(false)
+    const avatar = avatarFor(avatarUrl, avatarGender)
 
     const NavList = ({ onNavigate }: { onNavigate?: () => void }) => (
         <ul className='flex flex-col gap-1 px-3'>
@@ -61,7 +65,7 @@ const DashboardShell = ({ brandLabel, navItems, onLogout, avatarUrl, displayName
 
                 {avatarUrl !== undefined && (
                     <div className='px-4 md:px-6 py-5 border-b border-gray-100 flex items-center gap-3'>
-                        <img src={avatarUrl || '/assets/profile_pic.png'} alt='' className='w-10 h-10 rounded-full object-cover bg-blue-50 ring-2 ring-blue-50 shrink-0' />
+                        <img src={avatar} alt='' className='w-10 h-10 rounded-full object-cover bg-blue-50 ring-2 ring-blue-50 shrink-0' />
                         <div className='hidden md:block min-w-0'>
                             <p className='text-sm font-semibold text-gray-800 truncate'>{displayName || 'Loading...'}</p>
                             <p className='text-xs text-gray-400 truncate'>{subLabel}</p>
@@ -110,7 +114,7 @@ const DashboardShell = ({ brandLabel, navItems, onLogout, avatarUrl, displayName
                 </div>
                 {avatarUrl !== undefined && (
                     <div className='flex items-center gap-3 px-5 py-4 border-b border-gray-100 bg-blue-50/50'>
-                        <img src={avatarUrl || '/assets/profile_pic.png'} alt='' className='w-11 h-11 rounded-full object-cover bg-blue-100' />
+                        <img src={avatar} alt='' className='w-11 h-11 rounded-full object-cover bg-blue-100' />
                         <div className='min-w-0'>
                             <p className='font-semibold text-gray-900 truncate'>{displayName || 'Loading...'}</p>
                             <p className='text-xs text-gray-500 truncate'>{subLabel}</p>
