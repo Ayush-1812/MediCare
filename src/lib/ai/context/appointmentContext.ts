@@ -5,7 +5,10 @@ export class AppointmentContextService {
         try {
             const appointments = await prisma.appointment.findMany({
                 where: { userId },
-                include: { doctor: true }
+                // Only the two fields `formatAppointment` renders. `doctor: true` pulled the
+                // whole row — including the doctor's password hash — into the context object
+                // that gets serialised into the Gemini prompt.
+                include: { doctor: { select: { name: true, speciality: true } } }
             });
 
             if (appointments.length === 0) {

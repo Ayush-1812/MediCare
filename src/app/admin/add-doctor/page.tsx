@@ -4,7 +4,10 @@ import React, { useState } from 'react'
 import { addDoctor } from '@/app/actions/adminActions'
 import { toast } from 'react-toastify'
 import { specialityData } from '@/lib/constants'
-import { Upload } from 'lucide-react'
+import { Upload, Check } from 'lucide-react'
+import { DEFAULT_AVAILABLE_DAYS, DEFAULT_SLOT_DURATION, DEFAULT_SLOT_END, DEFAULT_SLOT_START, WEEKDAYS, type Weekday } from '@/lib/schedule'
+
+const CONSULTATION_MODES = ['Video Consultation', 'In-Person'] as const
 
 const inputClass = 'w-full bg-gray-50 border border-gray-200 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 rounded-xl px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all'
 const labelClass = 'text-xs font-semibold text-gray-500 mb-1.5 block'
@@ -23,11 +26,30 @@ const AddDoctor = () => {
     const [address2, setAddress2] = useState('')
     const [languages, setLanguages] = useState('')
     const [awards, setAwards] = useState('')
+    const [gender, setGender] = useState('Not Selected')
+    const [phone, setPhone] = useState('')
+    const [registrationNo, setRegistrationNo] = useState('')
+    const [hospital, setHospital] = useState('')
+    const [city, setCity] = useState('')
+    const [modes, setModes] = useState<string[]>(['Video Consultation'])
+    const [days, setDays] = useState<Weekday[]>(DEFAULT_AVAILABLE_DAYS)
+    const [startTime, setStartTime] = useState(DEFAULT_SLOT_START)
+    const [endTime, setEndTime] = useState(DEFAULT_SLOT_END)
+    const [slotDuration, setSlotDuration] = useState(String(DEFAULT_SLOT_DURATION))
+
+    const toggleDay = (day: Weekday) =>
+        setDays((prev) => (prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]))
+
+    const toggleMode = (mode: string) =>
+        setModes((prev) => (prev.includes(mode) ? prev.filter((m) => m !== mode) : [...prev, mode]))
 
     const onSubmitHandler = async (event: React.FormEvent) => {
         event.preventDefault()
         try {
             if (!docImg) return toast.error('Image Not Selected')
+            if (modes.length === 0) return toast.error('Select at least one consultation mode')
+            if (days.length === 0) return toast.error('Select at least one consulting day')
+            if (endTime <= startTime) return toast.error('Consulting end time must be after the start time')
 
             const formData = new FormData()
             formData.append('image', docImg)
@@ -42,6 +64,16 @@ const AddDoctor = () => {
             formData.append('languages', languages)
             formData.append('awards', awards)
             formData.append('address', JSON.stringify({ line1: address1, line2: address2 }))
+            formData.append('gender', gender)
+            formData.append('phone', phone)
+            formData.append('registrationNo', registrationNo)
+            formData.append('hospital', hospital)
+            formData.append('city', city)
+            formData.append('consultationModes', modes.join(','))
+            formData.append('availableDays', [...days].sort((a, b) => WEEKDAYS.indexOf(a) - WEEKDAYS.indexOf(b)).join(','))
+            formData.append('slotStartTime', startTime)
+            formData.append('slotEndTime', endTime)
+            formData.append('slotDuration', slotDuration)
 
             const res = await addDoctor(formData)
             if (res.success) {
@@ -57,6 +89,11 @@ const AddDoctor = () => {
                 setFees('')
                 setLanguages('')
                 setAwards('')
+                setPhone('')
+                setRegistrationNo('')
+                setHospital('')
+                setCity('')
+                setGender('Not Selected')
             } else {
                 toast.error(res.message)
             }
@@ -111,8 +148,20 @@ const AddDoctor = () => {
                             </select>
                         </div>
                         <div>
-                            <label className={labelClass}>Fees</label>
-                            <input onChange={(e) => setFees(e.target.value)} value={fees} className={inputClass} type="number" placeholder='e.g. 50' required />
+                            <label className={labelClass}>Consultation fee (₹)</label>
+                            <input onChange={(e) => setFees(e.target.value)} value={fees} className={inputClass} type="number" min={0} placeholder='e.g. 600' required />
+                        </div>
+                        <div>
+                            <label className={labelClass}>Gender</label>
+                            <select onChange={(e) => setGender(e.target.value)} value={gender} className={`${inputClass} appearance-none`}>
+                                <option value='Not Selected'>Prefer not to say</option>
+                                <option value='Male'>Male</option>
+                                <option value='Female'>Female</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className={labelClass}>Contact number</label>
+                            <input onChange={(e) => setPhone(e.target.value)} value={phone} className={inputClass} type="tel" placeholder='e.g. 98765 43210' />
                         </div>
                     </div>
 
@@ -143,6 +192,81 @@ const AddDoctor = () => {
                         <div>
                             <label className={labelClass}>Awards & Recognition</label>
                             <input onChange={(e) => setAwards(e.target.value)} value={awards} className={inputClass} type="text" placeholder='e.g. Best Doctor 2023' required />
+                        </div>
+                        <div>
+                            <label className={labelClass}>Medical Registration No.</label>
+                            <input onChange={(e) => setRegistrationNo(e.target.value)} value={registrationNo} className={inputClass} type="text" placeholder='State medical council reg. no.' required />
+                        </div>
+                        <div>
+                            <label className={labelClass}>Hospital / Clinic</label>
+                            <input onChange={(e) => setHospital(e.target.value)} value={hospital} className={inputClass} type="text" placeholder='e.g. Apollo Hospital' />
+                        </div>
+                        <div>
+                            <label className={labelClass}>City</label>
+                            <input onChange={(e) => setCity(e.target.value)} value={city} className={inputClass} type="text" placeholder='e.g. Mumbai' />
+                        </div>
+                    </div>
+                </div>
+
+                <div className='mt-8 pt-8 border-t border-gray-100'>
+                    <p className='font-semibold text-gray-800 mb-1'>Consulting hours</p>
+                    <p className='text-sm text-gray-400 mb-4'>The booking calendar patients see is generated from these.</p>
+
+                    <label className={labelClass}>Consulting days</label>
+                    <div className='flex flex-wrap gap-2 mb-5'>
+                        {WEEKDAYS.map((day) => {
+                            const active = days.includes(day)
+                            return (
+                                <button
+                                    key={day}
+                                    type='button'
+                                    onClick={() => toggleDay(day)}
+                                    aria-pressed={active}
+                                    className={`w-14 py-2.5 rounded-xl text-xs font-bold border transition-colors flex items-center justify-center gap-1 ${active ? 'bg-blue-600 border-blue-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-500 hover:border-blue-300'}`}
+                                >
+                                    {active && <Check className='w-3 h-3' />}
+                                    {day}
+                                </button>
+                            )
+                        })}
+                    </div>
+
+                    <div className='grid grid-cols-1 sm:grid-cols-3 gap-4'>
+                        <div>
+                            <label className={labelClass}>Start time</label>
+                            <input className={inputClass} type='time' value={startTime} onChange={(e) => setStartTime(e.target.value)} required />
+                        </div>
+                        <div>
+                            <label className={labelClass}>End time</label>
+                            <input className={inputClass} type='time' value={endTime} onChange={(e) => setEndTime(e.target.value)} required />
+                        </div>
+                        <div>
+                            <label className={labelClass}>Slot length</label>
+                            <select className={`${inputClass} appearance-none`} value={slotDuration} onChange={(e) => setSlotDuration(e.target.value)}>
+                                {[15, 20, 30, 45, 60].map((m) => (
+                                    <option key={m} value={m}>{m} minutes</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className='mt-5'>
+                        <label className={labelClass}>Consultation modes</label>
+                        <div className='flex gap-2 max-w-md'>
+                            {CONSULTATION_MODES.map((mode) => {
+                                const active = modes.includes(mode)
+                                return (
+                                    <button
+                                        key={mode}
+                                        type='button'
+                                        onClick={() => toggleMode(mode)}
+                                        aria-pressed={active}
+                                        className={`flex-1 text-xs font-semibold px-3 py-2.5 rounded-xl border transition-colors ${active ? 'bg-blue-600 border-blue-600 text-white' : 'bg-gray-50 border-gray-200 text-gray-600 hover:border-blue-300'}`}
+                                    >
+                                        {mode}
+                                    </button>
+                                )
+                            })}
                         </div>
                     </div>
                 </div>

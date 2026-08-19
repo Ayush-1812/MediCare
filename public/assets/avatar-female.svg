@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160" width="160" height="160" role="img" aria-label="Default female avatar">
+  <defs>
+    <linearGradient id="fBg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fce7f3"/>
+      <stop offset="100%" stop-color="#f5d0fe"/>
+    </linearGradient>
+    <clipPath id="fClip"><circle cx="80" cy="80" r="80"/></clipPath>
+  </defs>
+  <g clip-path="url(#fClip)">
+    <rect width="160" height="160" fill="url(#fBg)"/>
+    <!-- hair behind -->
+    <path d="M44 78c0-28 14-44 36-44s36 16 36 44c0 20-4 32-8 40l-10-6c4-12 5-24 4-34-14 6-38 6-48-2-2 12-1 24 3 36l-10 6c-4-8-3-20-3-40z" fill="#4a2c1a"/>
+    <!-- shoulders -->
+    <path d="M20 160c0-28 27-46 60-46s60 18 60 46z" fill="#be185d"/>
+    <path d="M64 118h32v14a16 16 0 0 1-32 0z" fill="#f0bfa0"/>
+    <path d="M80 132 66 116l-8 4 22 22 22-22-8-4z" fill="#ffffff" opacity=".92"/>
+    <!-- head -->
+    <ellipse cx="80" cy="78" rx="29" ry="33" fill="#f9d9be"/>
+    <!-- fringe -->
+    <path d="M51 76c-2-24 13-38 29-38s31 14 29 38c-4-14-8-20-13-22-12 8-31 8-39 2-3 3-5 9-6 20z" fill="#4a2c1a"/>
+    <!-- ears -->
+    <circle cx="50" cy="82" r="5.5" fill="#f0bfa0"/>
+    <circle cx="110" cy="82" r="5.5" fill="#f0bfa0"/>
+    <!-- eyes + brows -->
+    <ellipse cx="69" cy="78" rx="3.4" ry="4.2" fill="#3f2a20"/>
+    <ellipse cx="91" cy="78" rx="3.4" ry="4.2" fill="#3f2a20"/>
+    <path d="M63 68c4-3 9-3 12-1M85 67c4-2 9-2 12 1" stroke="#3f2a20" stroke-width="2.6" stroke-linecap="round" fill="none"/>
+    <!-- mouth -->
+    <path d="M72 94c4 5 12 5 16 0" stroke="#d1607f" stroke-width="3" stroke-linecap="round" fill="none"/>
+  </g>
+</svg>

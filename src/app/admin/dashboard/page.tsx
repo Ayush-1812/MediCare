@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { adminDashboard } from '@/app/actions/adminActions'
 import { toast } from 'react-toastify'
+import { avatarFor } from '@/lib/avatar'
 import { Stethoscope, CalendarCheck, Users, ListChecks, Clock, CalendarClock } from 'lucide-react'
 
 const Dashboard = () => {
@@ -69,7 +70,7 @@ const Dashboard = () => {
                         <p className='text-center text-gray-400 py-10 text-sm'>No bookings yet.</p>
                     ) : dashData.latestAppointments.map((item: any, index: number) => (
                         <div className='flex items-center px-6 py-4 gap-4 hover:bg-gray-50/70 transition-colors' key={index}>
-                            <img className='rounded-full w-11 h-11 object-cover bg-blue-50' src={item.doctor.image || "/assets/profile_pic.png"} alt="" />
+                            <img className='rounded-full w-11 h-11 object-cover bg-blue-50' src={avatarFor(item.doctor.image, item.doctor.gender)} alt="" />
                             <div className='flex-1 min-w-0 text-sm'>
                                 <p className='text-gray-800 font-semibold truncate'>{item.doctor.name}</p>
                                 <p className='text-gray-400 flex items-center gap-1.5 mt-0.5'><Clock className='w-3.5 h-3.5' /> {item.slotDate}</p>

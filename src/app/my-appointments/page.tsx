@@ -6,6 +6,7 @@ import { cancelAppointment, listAppointments } from '@/app/actions/userActions'
 import { toast } from 'react-toastify'
 import { useRouter } from 'next/navigation'
 import { CalendarDays, MapPin, Video, XCircle, CheckCircle2, CreditCard } from 'lucide-react'
+import { avatarFor } from '@/lib/avatar'
 
 const MyAppointments = () => {
     const { token } = useContext(AppContext)
@@ -16,8 +17,11 @@ const MyAppointments = () => {
     const getAppointments = async () => {
         try {
             const res = await listAppointments()
-            if (res.success && res.appointments) {
-                setAppointments(res.appointments.reverse())
+            if (res.success) {
+                // Server already returns these newest-first; `.reverse()` undid that.
+                setAppointments(res.appointments)
+            } else {
+                toast.error(res.message)
             }
         } catch (error: any) {
             toast.error(error.message)
@@ -71,13 +75,11 @@ const MyAppointments = () => {
                 <div className='flex flex-col gap-4'>
                     {appointments.map((item, index) => (
                         <div className='bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 p-5 flex flex-col sm:flex-row gap-5' key={item.id ?? index}>
-                            {item.docData?.image && (
-                                <img
-                                    className="w-full sm:w-32 h-32 rounded-xl object-cover bg-blue-50 shrink-0"
-                                    src={item.docData.image}
-                                    alt={item.docData.name || "Doctor"}
-                                />
-                            )}
+                            <img
+                                className="w-full sm:w-32 h-32 rounded-xl object-cover bg-blue-50 shrink-0"
+                                src={avatarFor(item.docData?.image ?? item.doctor?.image, item.doctor?.gender)}
+                                alt={item.docData?.name || "Doctor"}
+                            />
 
                             <div className='flex-1 min-w-0'>
                                 <p className='text-gray-900 font-bold text-lg'>{item.docData?.name}</p>

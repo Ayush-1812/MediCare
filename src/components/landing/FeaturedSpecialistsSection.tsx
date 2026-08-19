@@ -3,7 +3,9 @@
 import React, { useContext } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppContext } from '../../context/AppContext'
-import { Bot, User as UserIcon } from 'lucide-react'
+import { Bot, User as UserIcon, Star } from 'lucide-react'
+import { avatarFor } from '@/lib/avatar'
+import { formatINR } from '@/lib/currency'
 
 const FeaturedSpecialistsSection = () => {
     const router = useRouter()
@@ -38,21 +40,29 @@ const FeaturedSpecialistsSection = () => {
                 {doctors && doctors.slice(0, 4).map((item: any, index: number) => (
                     <div onClick={() => router.push(`/appointment/${item.id}`)} className='border border-gray-200 rounded-2xl overflow-hidden cursor-pointer hover:shadow-xl transition-all duration-300 transform hover:-translate-y-2 bg-white flex flex-col items-center p-4' key={index}>
                         <div className='w-24 h-24 rounded-full overflow-hidden bg-blue-50 mb-4 border-4 border-white shadow-sm'>
-                            {item.image && (
-                                <img
-                                    className="w-full h-full object-cover"
-                                    src={item.image}
-                                    alt={item.name || "Doctor"}
-                                />
-                            )}
+                            <img
+                                className="w-full h-full object-cover"
+                                src={avatarFor(item.image, item.gender)}
+                                alt={item.name || "Doctor"}
+                            />
                         </div>
 
                         <div className='text-center'>
                             <p className='text-gray-900 text-lg font-bold mb-1'>{item.name}</p>
                             <p className='text-blue-600 text-sm font-medium mb-3'>{item.speciality}</p>
                             
+                            {/* Was a hard-coded "4.8 (120+ Reviews)" on every card. Only shown
+                                when the doctor actually has a rating. */}
                             <div className='flex items-center justify-center gap-1 text-xs text-gray-500 mb-4 bg-gray-50 py-1 px-3 rounded-full'>
-                                <span className='text-yellow-400'>★</span> 4.8 (120+ Reviews)
+                                {typeof item.rating === 'number' ? (
+                                    <>
+                                        <Star className='w-3 h-3 text-amber-400 fill-amber-400' />
+                                        {item.rating.toFixed(1)}
+                                        {item.totalReviews > 0 && ` (${item.totalReviews} reviews)`}
+                                    </>
+                                ) : (
+                                    <>{formatINR(item.fees)} / consultation</>
+                                )}
                             </div>
                             
                             <button className='w-full bg-blue-50 hover:bg-blue-600 hover:text-white text-blue-600 font-semibold py-2 rounded-full text-sm transition-colors duration-300'>

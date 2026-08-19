@@ -5,6 +5,8 @@ import { appointmentsDoctor, appointmentComplete, appointmentCancelDoctor, start
 import { toast } from 'react-toastify'
 import { useRouter } from 'next/navigation'
 import { Video, Check, X, CreditCard, Banknote } from 'lucide-react'
+import { formatINR } from '@/lib/currency'
+import { avatarFor } from '@/lib/avatar'
 
 const Appointments = () => {
     const [appointments, setAppointments] = useState<any[]>([])
@@ -12,8 +14,10 @@ const Appointments = () => {
 
     const getAppointments = async () => {
         const res = await appointmentsDoctor()
-        if (res.success && res.appointments) {
-            setAppointments(res.appointments.reverse())
+        if (res.success) {
+            // Already newest-first from the server; `.reverse()` here mutated that array
+            // and flipped it back to oldest-first.
+            setAppointments(res.appointments)
         } else {
             toast.error(res.message)
         }
@@ -74,7 +78,7 @@ const Appointments = () => {
                         <div className='flex flex-wrap sm:grid grid-cols-[0.5fr_2.5fr_1fr_2fr_1fr_1.5fr] gap-3 items-center text-gray-600 py-4 px-6 hover:bg-gray-50/70 transition-colors' key={item.id ?? index}>
                             <p className='max-sm:hidden text-gray-400 font-medium'>{index + 1}</p>
                             <div className='flex items-center gap-3'>
-                                <img className='w-9 h-9 rounded-full object-cover bg-blue-50' src={item.user.image || "/assets/profile_pic.png"} alt="" />
+                                <img className='w-9 h-9 rounded-full object-cover bg-blue-50' src={avatarFor(item.user.image, item.user.gender)} alt="" />
                                 <p className='font-semibold text-gray-800 truncate'>{item.user.name}</p>
                             </div>
                             <div>
@@ -84,7 +88,7 @@ const Appointments = () => {
                                 </span>
                             </div>
                             <p className='text-sm'>{item.slotDate}, {item.slotTime}</p>
-                            <p className='font-semibold text-gray-800'>${item.amount}</p>
+                            <p className='font-semibold text-gray-800'>{formatINR(item.amount)}</p>
                             {item.cancelled ? (
                                 <span className='text-red-500 bg-red-50 text-xs font-semibold px-3 py-1.5 rounded-full w-fit'>Cancelled</span>
                             ) : item.isCompleted ? (

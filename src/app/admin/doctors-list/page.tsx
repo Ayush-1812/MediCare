@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { allDoctors, changeAvailability } from '@/app/actions/adminActions'
 import { toast } from 'react-toastify'
+import { avatarFor } from '@/lib/avatar'
 import { ToggleLeft, ToggleRight } from 'lucide-react'
 
 const DoctorsList = () => {
@@ -39,7 +40,7 @@ const DoctorsList = () => {
             <div className='grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4'>
                 {doctors.map((item, index) => (
                     <div className='bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300' key={item.id ?? index}>
-                        <img className='w-full h-36 object-cover bg-blue-50' src={item.image || "/assets/profile_pic.png"} alt="" />
+                        <img className='w-full h-36 object-cover bg-blue-50' src={avatarFor(item.image, item.gender)} alt="" />
                         <div className='p-4'>
                             <p className='text-gray-900 font-semibold truncate'>{item.name}</p>
                             <p className='text-gray-400 text-xs mb-3 truncate'>{item.speciality}</p>

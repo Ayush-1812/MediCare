@@ -12,6 +12,7 @@ type AuthResponse = {
     success: boolean
     token?: string
     message?: string
+    profileCompleted?: boolean
 }
 
 const Login = () => {
@@ -31,11 +32,18 @@ const Login = () => {
     const { setToken, setDocToken } = useContext(AppContext)
     const router = useRouter()
 
+    const [submitting, setSubmitting] = useState(false)
+
     const onSubmitHandler = async (event: React.FormEvent) => {
         event.preventDefault()
+        if (submitting) return
 
         if (state === 'Sign Up' && password !== confirmPassword) {
             toast.error("Passwords do not match")
+            return
+        }
+        if (state === 'Sign Up' && password.length < 8) {
+            toast.error("Password must be at least 8 characters")
             return
         }
 
@@ -44,37 +52,47 @@ const Login = () => {
         formData.append('password', password)
         if (state === 'Sign Up') {
             formData.append('name', name)
-            // Note: Gender, Age, and Blood Group are currently UI only and not sent to the existing backend API.
+            // Gender is stored so we can show the right default avatar before a photo is
+            // uploaded. Age and blood group remain UI-only for now.
+            formData.append('gender', gender)
         }
 
+        setSubmitting(true)
         let res: AuthResponse
+        try {
+            if (role === 'User') {
+                res = state === 'Sign Up'
+                    ? await registerUser(formData)
+                    : await loginUser(formData)
+            } else {
+                res = state === 'Sign Up'
+                    ? await registerDoctor(formData)
+                    : await loginDoctor(formData)
+            }
+        } finally {
+            setSubmitting(false)
+        }
+
+        if (!res.success || !res.token) {
+            toast.error(res.message || 'Authentication failed')
+            return
+        }
+
+        const tokenKey = role === 'User' ? 'token' : 'docToken'
+        localStorage.setItem(tokenKey, res.token)
+        toast.success(`${state} Successful`)
 
         if (role === 'User') {
-            res = state === 'Sign Up'
-                ? await registerUser(formData)
-                : await loginUser(formData)
-        } else {
-            res = state === 'Sign Up'
-                ? await registerDoctor(formData)
-                : await loginDoctor(formData)
+            setToken(res.token)
+            router.push('/')
+            return
         }
 
-        if (res.success && res.token) {
-            const tokenKey = role === 'User' ? 'token' : 'docToken'
-            localStorage.setItem(tokenKey, res.token)
-
-            if (role === 'User') {
-                setToken(res.token)
-                router.push('/')
-            } else {
-                setDocToken(res.token)
-                router.push('/doctor-dashboard/dashboard')
-            }
-
-            toast.success(`${state} Successful`)
-        } else {
-            toast.error(res.message || 'Authentication failed')
-        }
+        setDocToken(res.token)
+        // A doctor who has not filled in their practice details yet cannot be found or
+        // booked, so send them straight to the onboarding form. Everyone else lands on
+        // the home page.
+        router.push(res.profileCompleted === false ? '/doctor-dashboard/onboarding' : '/')
     }
 
     // Simple password strength calculator
@@ -318,9 +336,12 @@ const Login = () => {
 
                         <button
                             type="submit"
-                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 mt-2"
+                            disabled={submitting}
+                            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-bold py-3.5 rounded-xl shadow-md hover:shadow-lg transition-all duration-300 mt-2"
                         >
-                            {state === 'Sign Up' ? 'Create Account' : 'Sign In'}
+                            {submitting
+                                ? 'Please wait...'
+                                : state === 'Sign Up' ? 'Create Account' : 'Sign In'}
                         </button>
 
                         {state === 'Sign Up' && (

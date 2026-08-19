@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react'
 import { appointmentsAdmin } from '@/app/actions/adminActions'
 import { toast } from 'react-toastify'
+import { formatINR } from '@/lib/currency'
+import { avatarFor } from '@/lib/avatar'
 import { cancelAppointment } from '@/app/actions/userActions'
 import { X } from 'lucide-react'
 
@@ -54,15 +56,15 @@ const Appointments = () => {
                         <div className='flex flex-wrap sm:grid grid-cols-[0.5fr_2.5fr_2fr_2.5fr_1fr_1fr] gap-3 items-center text-gray-600 py-4 px-6 hover:bg-gray-50/70 transition-colors' key={item.id ?? index}>
                             <p className='max-sm:hidden text-gray-400 font-medium'>{index + 1}</p>
                             <div className='flex items-center gap-3'>
-                                <img className='w-9 h-9 rounded-full object-cover bg-blue-50' src={item.user.image || "/assets/profile_pic.png"} alt="" />
+                                <img className='w-9 h-9 rounded-full object-cover bg-blue-50' src={avatarFor(item.user.image, item.user.gender)} alt="" />
                                 <p className='font-semibold text-gray-800 truncate'>{item.user.name}</p>
                             </div>
                             <p className='text-sm'>{item.slotDate}, {item.slotTime}</p>
                             <div className='flex items-center gap-3'>
-                                <img className='w-9 h-9 rounded-full object-cover bg-gray-100' src={item.doctor.image || "/assets/profile_pic.png"} alt="" />
+                                <img className='w-9 h-9 rounded-full object-cover bg-gray-100' src={avatarFor(item.doctor.image, item.doctor.gender)} alt="" />
                                 <p className='truncate'>{item.doctor.name}</p>
                             </div>
-                            <p className='font-semibold text-gray-800'>${item.amount}</p>
+                            <p className='font-semibold text-gray-800'>{formatINR(item.amount)}</p>
                             {item.cancelled ? (
                                 <span className='text-red-500 bg-red-50 text-xs font-semibold px-3 py-1.5 rounded-full w-fit'>Cancelled</span>
                             ) : item.isCompleted ? (
