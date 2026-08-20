@@ -21,18 +21,32 @@ const AppContextProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, [])
 
+    // Both profile fetches double as session checks. If the server says the session is
+    // gone, the local token is dropped as well — otherwise the navbar keeps rendering the
+    // signed-in avatar menu off a dead localStorage token and never offers Login, leaving
+    // no way back into the app.
     const getUserProfileData = useCallback(async () => {
         const res = await getProfile()
         if (res.success) {
             setUserData(res.userData)
+            return true
         }
+        localStorage.removeItem('token')
+        setToken(false)
+        setUserData(null)
+        return false
     }, [])
 
     const getDoctorProfileData = useCallback(async () => {
         const res = await doctorProfile()
         if (res.success) {
             setDoctorData(res.profileData)
+            return true
         }
+        localStorage.removeItem('docToken')
+        setDocToken(false)
+        setDoctorData(null)
+        return false
     }, [])
 
     useEffect(() => {
@@ -41,7 +55,7 @@ const AppContextProvider = ({ children }: { children: React.ReactNode }) => {
 
     // Restore whichever sessions this browser has. The tokens here are only a hint for
     // the UI — the httpOnly cookie set at login is what actually authenticates every
-    // server action.
+    // server action, and the effects below confirm it is still valid.
     useEffect(() => {
         const storedToken = localStorage.getItem('token')
         const storedDocToken = localStorage.getItem('docToken')
@@ -50,7 +64,6 @@ const AppContextProvider = ({ children }: { children: React.ReactNode }) => {
         setAuthReady(true)
     }, [])
 
-    // Keep the logged-in patient's profile (name, avatar) available app-wide
     useEffect(() => {
         if (token) {
             getUserProfileData()
@@ -59,7 +72,6 @@ const AppContextProvider = ({ children }: { children: React.ReactNode }) => {
         }
     }, [token, getUserProfileData])
 
-    // Keep the logged-in doctor's profile (name, avatar) available app-wide
     useEffect(() => {
         if (docToken) {
             getDoctorProfileData()

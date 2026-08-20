@@ -45,7 +45,7 @@ const Navbar = () => {
             <div className='px-4 sm:px-[10%] bg-white/80 backdrop-blur-xl border-b border-gray-100/80'>
             <div className='flex items-center justify-between text-sm py-4 md:mx-10 px-6 sm:px-10 lg:px-20'>
                 <Link href="/" className='shrink-0'>
-                    <img className='w-40 sm:w-44 cursor-pointer' src="/assets/logo.svg" alt='Logo' />
+                    <img className='w-52 sm:w-60 cursor-pointer' src="/assets/logo.svg" alt='MediCare' />
                 </Link>
 
                 <ul className='hidden md:flex items-center gap-6 font-medium text-gray-600'>
@@ -122,12 +122,12 @@ const Navbar = () => {
                         </div>
                     ) : (
                         <div className='hidden md:flex items-center gap-3'>
-                            <button onClick={() => router.push('/login')} className='text-gray-600 font-medium px-4 py-2.5 rounded-full hover:bg-gray-100 hover:text-gray-900 transition-all'>
+                            <Link href='/login?mode=login' className='text-gray-600 font-medium px-4 py-2.5 rounded-full hover:bg-gray-100 hover:text-gray-900 transition-all'>
                                 Login
-                            </button>
-                            <button onClick={() => router.push('/login')} className='bg-primary text-white px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md hover:bg-primary/90 hover:-translate-y-0.5 active:translate-y-0 transition-all'>
+                            </Link>
+                            <Link href='/login?mode=signup' className='bg-primary text-white px-6 py-2.5 rounded-full font-medium shadow-sm hover:shadow-md hover:bg-primary/90 hover:-translate-y-0.5 active:translate-y-0 transition-all'>
                                 Create Account
-                            </button>
+                            </Link>
                         </div>
                     )}
                     <button onClick={() => setShowMenu(true)} className='md:hidden p-1.5 text-gray-700 hover:bg-gray-100 rounded-lg transition-colors' aria-label="Open menu">
@@ -148,7 +148,7 @@ const Navbar = () => {
             {/* Mobile Menu Drawer */}
             <div className={`fixed md:hidden right-0 top-0 bottom-0 z-50 w-[82%] max-w-xs bg-white shadow-2xl transition-transform duration-300 ease-out ${showMenu ? 'translate-x-0' : 'translate-x-full'}`}>
                 <div className='flex items-center justify-between px-5 py-5 border-b border-gray-100'>
-                    <img className='w-32' src="/assets/logo.svg" alt="" />
+                    <img className='w-40' src="/assets/logo.svg" alt="MediCare" />
                     <button onClick={() => setShowMenu(false)} className='p-1.5 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors' aria-label="Close menu">
                         <X className='w-6 h-6' />
                     </button>
@@ -230,12 +230,12 @@ const Navbar = () => {
                         </button>
                     ) : (
                         <div className='flex flex-col gap-2'>
-                            <button onClick={() => { router.push('/login'); setShowMenu(false) }} className='w-full bg-primary text-white font-semibold py-3 rounded-xl hover:bg-primary/90 transition-colors'>
+                            <Link href='/login?mode=signup' onClick={() => setShowMenu(false)} className='w-full text-center bg-primary text-white font-semibold py-3 rounded-xl hover:bg-primary/90 transition-colors'>
                                 Create Account
-                            </button>
-                            <button onClick={() => { router.push('/login'); setShowMenu(false) }} className='w-full text-gray-600 font-semibold py-3 rounded-xl hover:bg-gray-50 transition-colors'>
+                            </Link>
+                            <Link href='/login?mode=login' onClick={() => setShowMenu(false)} className='w-full text-center text-gray-600 font-semibold py-3 rounded-xl hover:bg-gray-50 transition-colors'>
                                 Login
-                            </button>
+                            </Link>
                         </div>
                     )}
                 </div>

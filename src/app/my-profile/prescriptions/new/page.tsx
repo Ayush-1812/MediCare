@@ -1,52 +1,40 @@
 'use client'
 
 import React, { useState } from 'react'
-import PrescriptionUpload from '@/components/PrescriptionUpload'
-import PrescriptionReview from '@/components/PrescriptionReview'
 import { useRouter } from 'next/navigation'
+import { ChevronLeft } from 'lucide-react'
+import PrescriptionUpload, { type ScanResult } from '@/components/PrescriptionUpload'
+import PrescriptionReview from '@/components/PrescriptionReview'
 
 const NewPrescription = () => {
     const router = useRouter()
-    const [step, setStep] = useState<'upload' | 'review'>('upload')
-    const [scanData, setScanData] = useState<{ imageUrl: string, medicines: any[] } | null>(null)
-
-    const handleScanComplete = (imageUrl: string, medicines: any[]) => {
-        setScanData({ imageUrl, medicines })
-        setStep('review')
-    }
+    const [scan, setScan] = useState<ScanResult | null>(null)
 
     return (
-        <div className="max-w-3xl mx-auto my-10 px-4">
+        <div className='max-w-4xl mx-auto my-10 px-4'>
             <button
-                onClick={() => router.back()}
-                className="mb-6 text-gray-500 hover:text-gray-800 flex items-center gap-1 text-sm"
+                onClick={() => router.push('/my-profile/prescriptions')}
+                className='mb-6 text-gray-500 hover:text-gray-800 flex items-center gap-1 text-sm'
             >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7"></path></svg>
-                Back to Prescriptions
+                <ChevronLeft className='w-4 h-4' />
+                Back to prescriptions
             </button>
 
-            <div className="mb-8">
-                <h1 className="text-2xl font-bold text-gray-900">
-                    {step === 'upload' ? 'Scan & Digitize' : 'Verify Details'}
+            <div className='mb-8'>
+                <h1 className='text-2xl font-bold text-gray-900'>
+                    {scan ? 'Verify details' : 'Scan & digitize'}
                 </h1>
-                <p className="text-gray-500">
-                    {step === 'upload'
-                        ? 'Upload a photo of your prescription to extract medicine details.'
-                        : 'Please review the extracted information for accuracy.'
-                    }
+                <p className='text-gray-500'>
+                    {scan
+                        ? 'Check the extracted medicines and notes against the image before saving.'
+                        : 'Upload a photo of your prescription to extract the medicines and notes.'}
                 </p>
             </div>
 
-            {step === 'upload' ? (
-                <PrescriptionUpload onScanComplete={handleScanComplete} />
+            {scan ? (
+                <PrescriptionReview scan={scan} onCancel={() => setScan(null)} />
             ) : (
-                scanData && (
-                    <PrescriptionReview
-                        imageUrl={scanData.imageUrl}
-                        initialMedicines={scanData.medicines}
-                        onCancel={() => setStep('upload')}
-                    />
-                )
+                <PrescriptionUpload onScanComplete={setScan} />
             )}
         </div>
     )

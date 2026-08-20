@@ -5,6 +5,7 @@ import { appointmentsAdmin } from '@/app/actions/adminActions'
 import { toast } from 'react-toastify'
 import { formatINR } from '@/lib/currency'
 import { avatarFor } from '@/lib/avatar'
+import { appointmentStatus, formatSlotDate, STATUS_STYLES } from '@/lib/appointment'
 import { cancelAppointment } from '@/app/actions/userActions'
 import { X } from 'lucide-react'
 
@@ -59,21 +60,27 @@ const Appointments = () => {
                                 <img className='w-9 h-9 rounded-full object-cover bg-blue-50' src={avatarFor(item.user.image, item.user.gender)} alt="" />
                                 <p className='font-semibold text-gray-800 truncate'>{item.user.name}</p>
                             </div>
-                            <p className='text-sm'>{item.slotDate}, {item.slotTime}</p>
+                            <p className='text-sm'>{formatSlotDate(item.slotDate)}, {item.slotTime}</p>
                             <div className='flex items-center gap-3'>
                                 <img className='w-9 h-9 rounded-full object-cover bg-gray-100' src={avatarFor(item.doctor.image, item.doctor.gender)} alt="" />
                                 <p className='truncate'>{item.doctor.name}</p>
                             </div>
                             <p className='font-semibold text-gray-800'>{formatINR(item.amount)}</p>
-                            {item.cancelled ? (
-                                <span className='text-red-500 bg-red-50 text-xs font-semibold px-3 py-1.5 rounded-full w-fit'>Cancelled</span>
-                            ) : item.isCompleted ? (
-                                <span className='text-emerald-600 bg-emerald-50 text-xs font-semibold px-3 py-1.5 rounded-full w-fit'>Completed</span>
-                            ) : (
-                                <button onClick={() => handleCancel(item.id)} className='w-9 h-9 flex items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors' aria-label='Cancel'>
-                                    <X className='w-4 h-4' />
-                                </button>
-                            )}
+                            {(() => {
+                                const status = appointmentStatus(item)
+                                if (status === 'Scheduled') {
+                                    return (
+                                        <button onClick={() => handleCancel(item.id)} className='w-9 h-9 flex items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors' aria-label='Cancel'>
+                                            <X className='w-4 h-4' />
+                                        </button>
+                                    )
+                                }
+                                return (
+                                    <span className={`text-xs font-semibold px-3 py-1.5 rounded-full w-fit border ${STATUS_STYLES[status]}`}>
+                                        {status}
+                                    </span>
+                                )
+                            })()}
                         </div>
                     ))}
                 </div>

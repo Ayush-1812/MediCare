@@ -7,19 +7,18 @@ interface EmptyStateProps {
   userName?: string;
 }
 
-const EmptyState: React.FC<EmptyStateProps> = ({ onSelectPrompt, userName = "there" }) => {
+const EmptyState: React.FC<EmptyStateProps> = ({ onSelectPrompt }) => {
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-12 text-center h-full">
-      <div className="w-24 h-24 bg-gradient-to-tr from-blue-600 to-teal-400 rounded-[2rem] flex items-center justify-center shadow-[0_10px_40px_-10px_rgba(59,130,246,0.5)] mb-8 transform hover:scale-105 transition-transform duration-500">
-        <Sparkles className="w-12 h-12 text-white" />
+    <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 text-center">
+      <div className="w-12 h-12 bg-slate-900 rounded-2xl flex items-center justify-center mb-5">
+        <Sparkles className="w-6 h-6 text-white" />
       </div>
-      
-      <h2 className="text-3xl sm:text-4xl font-black text-slate-800 tracking-tight mb-4">
-        Welcome to Aether AI
-      </h2>
-      
-      <p className="text-slate-500 max-w-lg text-[15px] leading-relaxed mb-8">
-        Your personal healthcare intelligence. I can help you understand your medical history, remind you about appointments, summarize prescriptions, and answer general health queries.
+
+      <h2 className="text-2xl font-semibold text-slate-900 mb-2">How can I help?</h2>
+
+      <p className="text-slate-500 max-w-md text-sm leading-relaxed mb-8">
+        I can look up your appointments and prescriptions, summarise your records, and answer
+        general health questions.
       </p>
 
       <SuggestedPrompts onSelect={onSelectPrompt} />
@@ -28,4 +27,3 @@ const EmptyState: React.FC<EmptyStateProps> = ({ onSelectPrompt, userName = "the
 };
 
 export default EmptyState;
-

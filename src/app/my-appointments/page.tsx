@@ -5,8 +5,9 @@ import { AppContext } from '@/context/AppContext'
 import { cancelAppointment, listAppointments } from '@/app/actions/userActions'
 import { toast } from 'react-toastify'
 import { useRouter } from 'next/navigation'
-import { CalendarDays, MapPin, Video, XCircle, CheckCircle2, CreditCard } from 'lucide-react'
+import { CalendarDays, MapPin, Video, XCircle, CheckCircle2, CreditCard, AlertTriangle, Clock } from 'lucide-react'
 import { avatarFor } from '@/lib/avatar'
+import { appointmentStatus, formatSlotDate } from '@/lib/appointment'
 
 const MyAppointments = () => {
     const { token } = useContext(AppContext)
@@ -93,36 +94,64 @@ const MyAppointments = () => {
                                 )}
 
                                 <p className='text-sm text-gray-600 flex items-center gap-1.5 font-medium'>
-                                    <CalendarDays className='w-4 h-4 text-gray-400' /> {item.slotDate} &middot; {item.slotTime}
+                                    <CalendarDays className='w-4 h-4 text-gray-400' /> {formatSlotDate(item.slotDate)} &middot; {item.slotTime}
                                 </p>
                             </div>
 
                             <div className='flex sm:flex-col gap-2 justify-center sm:min-w-[190px]'>
-                                {!item.cancelled && !item.isCompleted && item.payment && (
-                                    <span className='flex items-center justify-center gap-1.5 py-2.5 border border-emerald-200 bg-emerald-50 rounded-xl text-emerald-600 text-sm font-semibold'>
-                                        <CreditCard className='w-4 h-4' /> Paid
-                                    </span>
-                                )}
-                                {!item.cancelled && !item.isCompleted && item.meetingId && (
-                                    <button onClick={() => router.push(`/video-call/${item.id}`)} className='flex items-center justify-center gap-1.5 text-sm text-white text-center py-2.5 rounded-xl bg-primary hover:bg-primary/90 hover:-translate-y-0.5 transition-all shadow-sm font-semibold'>
-                                        <Video className='w-4 h-4' /> Join Video Call
-                                    </button>
-                                )}
-                                {!item.cancelled && !item.isCompleted && (
-                                    <button onClick={() => handleCancelAppointment(item.id)} className='flex items-center justify-center gap-1.5 text-sm text-gray-500 text-center py-2.5 rounded-xl border border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-semibold'>
-                                        <XCircle className='w-4 h-4' /> Cancel Appointment
-                                    </button>
-                                )}
-                                {item.cancelled && !item.isCompleted && (
-                                    <span className='flex items-center justify-center gap-1.5 py-2.5 border border-red-200 bg-red-50 rounded-xl text-red-500 text-sm font-semibold'>
-                                        <XCircle className='w-4 h-4' /> Cancelled
-                                    </span>
-                                )}
-                                {item.isCompleted && (
-                                    <span className='flex items-center justify-center gap-1.5 py-2.5 border border-emerald-200 bg-emerald-50 rounded-xl text-emerald-600 text-sm font-semibold'>
-                                        <CheckCircle2 className='w-4 h-4' /> Completed
-                                    </span>
-                                )}
+                                {(() => {
+                                    // Status is derived, not read off a single flag: an appointment
+                                    // whose slot has passed without being completed is a no-show,
+                                    // and must not keep offering "Join call" or "Cancel".
+                                    const status = appointmentStatus(item)
+
+                                    if (status === 'Scheduled') {
+                                        return (
+                                            <>
+                                                {item.payment && (
+                                                    <span className='flex items-center justify-center gap-1.5 py-2.5 border border-emerald-200 bg-emerald-50 rounded-xl text-emerald-600 text-sm font-semibold'>
+                                                        <CreditCard className='w-4 h-4' /> Paid
+                                                    </span>
+                                                )}
+                                                {item.meetingId && (
+                                                    <button onClick={() => router.push(`/video-call/${item.id}`)} className='flex items-center justify-center gap-1.5 text-sm text-white text-center py-2.5 rounded-xl bg-primary hover:bg-primary/90 hover:-translate-y-0.5 transition-all shadow-sm font-semibold'>
+                                                        <Video className='w-4 h-4' /> Join Video Call
+                                                    </button>
+                                                )}
+                                                <button onClick={() => handleCancelAppointment(item.id)} className='flex items-center justify-center gap-1.5 text-sm text-gray-500 text-center py-2.5 rounded-xl border border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-semibold'>
+                                                    <XCircle className='w-4 h-4' /> Cancel Appointment
+                                                </button>
+                                            </>
+                                        )
+                                    }
+
+                                    if (status === 'Cancelled') {
+                                        return (
+                                            <span className='flex items-center justify-center gap-1.5 py-2.5 border border-red-200 bg-red-50 rounded-xl text-red-600 text-sm font-semibold'>
+                                                <XCircle className='w-4 h-4' /> Cancelled
+                                            </span>
+                                        )
+                                    }
+
+                                    if (status === 'Completed') {
+                                        return (
+                                            <span className='flex items-center justify-center gap-1.5 py-2.5 border border-emerald-200 bg-emerald-50 rounded-xl text-emerald-600 text-sm font-semibold'>
+                                                <CheckCircle2 className='w-4 h-4' /> Completed
+                                            </span>
+                                        )
+                                    }
+
+                                    return (
+                                        <>
+                                            <span className='flex items-center justify-center gap-1.5 py-2.5 border border-amber-200 bg-amber-50 rounded-xl text-amber-600 text-sm font-semibold'>
+                                                <AlertTriangle className='w-4 h-4' /> Missed
+                                            </span>
+                                            <button onClick={() => router.push(`/doctors`)} className='flex items-center justify-center gap-1.5 text-sm text-gray-500 py-2.5 rounded-xl border border-gray-200 hover:bg-blue-50 hover:text-primary hover:border-blue-200 transition-all font-semibold'>
+                                                <Clock className='w-4 h-4' /> Rebook
+                                            </button>
+                                        </>
+                                    )
+                                })()}
                             </div>
                         </div>
                     ))}

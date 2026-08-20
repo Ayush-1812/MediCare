@@ -6,6 +6,7 @@ import { toast } from 'react-toastify'
 import { IndianRupee, CalendarCheck, Users, ListChecks, Check, X, Clock } from 'lucide-react'
 import { formatINR } from '@/lib/currency'
 import { avatarFor } from '@/lib/avatar'
+import { appointmentStatus, formatSlotDate, STATUS_STYLES } from '@/lib/appointment'
 
 const Dashboard = () => {
     const [dashData, setDashData] = useState<any>(null)
@@ -94,22 +95,28 @@ const Dashboard = () => {
                             <img className='rounded-full w-11 h-11 object-cover bg-blue-50' src={avatarFor(item.user.image, item.user.gender)} alt="" />
                             <div className='flex-1 min-w-0 text-sm'>
                                 <p className='text-gray-800 font-semibold truncate'>{item.user.name}</p>
-                                <p className='text-gray-400 flex items-center gap-1.5 mt-0.5'><Clock className='w-3.5 h-3.5' /> {item.slotDate}, {item.slotTime}</p>
+                                <p className='text-gray-400 flex items-center gap-1.5 mt-0.5'><Clock className='w-3.5 h-3.5' /> {formatSlotDate(item.slotDate)}, {item.slotTime}</p>
                             </div>
-                            {item.cancelled ? (
-                                <span className='text-red-500 bg-red-50 text-xs font-semibold px-3 py-1.5 rounded-full'>Cancelled</span>
-                            ) : item.isCompleted ? (
-                                <span className='text-emerald-600 bg-emerald-50 text-xs font-semibold px-3 py-1.5 rounded-full'>Completed</span>
-                            ) : (
-                                <div className='flex gap-2'>
-                                    <button onClick={() => cancelAppointment(item.id)} className='w-9 h-9 flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition-colors' aria-label='Cancel'>
-                                        <X className='w-4 h-4' />
-                                    </button>
-                                    <button onClick={() => completeAppointment(item.id)} className='w-9 h-9 flex items-center justify-center rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors' aria-label='Complete'>
-                                        <Check className='w-4 h-4' />
-                                    </button>
-                                </div>
-                            )}
+                            {(() => {
+                                const status = appointmentStatus(item)
+                                if (status === 'Scheduled') {
+                                    return (
+                                        <div className='flex gap-2'>
+                                            <button onClick={() => cancelAppointment(item.id)} className='w-9 h-9 flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition-colors' aria-label='Cancel'>
+                                                <X className='w-4 h-4' />
+                                            </button>
+                                            <button onClick={() => completeAppointment(item.id)} className='w-9 h-9 flex items-center justify-center rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors' aria-label='Complete'>
+                                                <Check className='w-4 h-4' />
+                                            </button>
+                                        </div>
+                                    )
+                                }
+                                return (
+                                    <span className={`text-xs font-semibold px-3 py-1.5 rounded-full border ${STATUS_STYLES[status]}`}>
+                                        {status}
+                                    </span>
+                                )
+                            })()}
                         </div>
                     ))}
                 </div>

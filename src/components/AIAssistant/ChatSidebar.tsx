@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Plus, Search, MessageSquare, FileText } from 'lucide-react';
+import { Plus, Search, MessageSquare } from 'lucide-react';
 
 interface ChatSidebarProps {
   activeId: string | null;
@@ -26,9 +26,7 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeId, onSelect, onNewChat
         const res = await fetch('/api/chat/conversations');
         if (res.ok) {
           const data = await res.json();
-          if (data.success) {
-            setConversations(data.conversations);
-          }
+          if (data.success) setConversations(data.conversations);
         }
       } catch (error) {
         console.error('Failed to fetch conversations:', error);
@@ -39,77 +37,74 @@ const ChatSidebar: React.FC<ChatSidebarProps> = ({ activeId, onSelect, onNewChat
     fetchConversations();
   }, [refreshKey]);
 
-  const filteredConversations = conversations.filter(c => 
-    c.title.toLowerCase().includes(searchQuery.toLowerCase())
+  const filtered = conversations.filter((c) =>
+    c.title.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   return (
-    <div className="h-full flex flex-col p-6">
-      {/* New Chat Button */}
-      <button 
+    <div className="h-full flex flex-col p-3">
+      <button
         onClick={onNewChat}
-        className="w-full bg-gradient-to-r from-blue-600 to-teal-500 hover:from-blue-700 hover:to-teal-600 text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-between transition-all shadow-[0_8px_20px_-6px_rgba(59,130,246,0.5)] hover:shadow-[0_10px_25px_-5px_rgba(59,130,246,0.6)] hover:-translate-y-0.5 active:translate-y-0"
+        className="w-full bg-slate-900 hover:bg-slate-700 text-white text-sm font-medium py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-colors"
       >
-        <span>New Chat</span>
-        <Plus className="w-5 h-5" />
+        <Plus className="w-4 h-4" /> New chat
       </button>
 
-      {/* Search Bar */}
-      <div className="mt-6 relative group">
-        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
-          <Search className="w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-        </div>
-        <input 
-          type="text" 
-          placeholder="Search chats..." 
+      <div className="mt-3 relative">
+        <Search className="absolute inset-y-0 left-3 my-auto w-4 h-4 text-slate-400" />
+        <input
+          type="text"
+          placeholder="Search chats"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full pl-10 pr-4 py-2.5 bg-white/40 border border-white/60 focus:border-blue-300 focus:ring-4 focus:ring-blue-100/50 rounded-xl text-sm outline-none transition-all placeholder-gray-500 font-medium text-gray-700 shadow-sm"
+          className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 focus:border-slate-400 rounded-xl text-sm outline-none transition-colors placeholder:text-slate-400 text-slate-700"
         />
       </div>
 
-      {/* Recent Consultations List */}
-      <div className="mt-8 flex-1 overflow-y-auto custom-scrollbar pr-1 -mr-1">
-        <h3 className="text-xs font-black text-gray-800 uppercase tracking-wider mb-3 px-1">Recent Consultations</h3>
-        
-        <div className="space-y-2">
+      <div className="mt-5 flex-1 overflow-y-auto custom-scrollbar -mr-1 pr-1">
+        <h3 className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2 px-2">
+          Recent
+        </h3>
+
+        <div className="space-y-0.5">
           {isLoading ? (
-            <div className="text-sm text-gray-500 px-2 py-4">Loading...</div>
-          ) : filteredConversations.length === 0 ? (
-            <div className="text-sm text-gray-500 px-2 py-4">No conversations found.</div>
+            <p className="text-sm text-slate-400 px-2 py-3">Loading...</p>
+          ) : filtered.length === 0 ? (
+            <p className="text-sm text-slate-400 px-2 py-3">
+              {searchQuery ? 'No matching chats.' : 'No conversations yet.'}
+            </p>
           ) : (
-            filteredConversations.map((conv) => {
+            filtered.map((conv) => {
               const isActive = activeId === conv.id;
-              
-              // Formatting a simple date string if it exists
-              let dateStr = 'Just now';
-              if (conv.lastMessageAt || conv.createdAt) {
-                const date = new Date(conv.lastMessageAt || conv.createdAt);
+
+              let dateStr = '';
+              const raw = conv.lastMessageAt || conv.createdAt;
+              if (raw) {
+                const date = new Date(raw);
                 const isToday = new Date().toDateString() === date.toDateString();
-                dateStr = isToday ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : date.toLocaleDateString();
+                dateStr = isToday
+                  ? date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+                  : date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
               }
 
               return (
-                <button 
+                <button
                   key={conv.id}
                   onClick={() => onSelect(conv.id)}
-                  className={`w-full text-left p-3.5 rounded-xl border transition-all duration-200 flex items-start gap-3 relative overflow-hidden group ${
-                    isActive 
-                      ? 'bg-white border-white shadow-[0_5px_15px_-3px_rgba(0,0,0,0.08)]' 
-                      : 'bg-transparent border-transparent hover:bg-white/50 hover:border-white/50 hover:shadow-sm'
+                  className={`w-full text-left px-2.5 py-2.5 rounded-lg transition-colors flex items-start gap-2.5 ${
+                    isActive ? 'bg-white border border-slate-200' : 'hover:bg-white/70 border border-transparent'
                   }`}
                 >
-                  {/* Active Indicator Line */}
-                  {isActive && (
-                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-blue-500 to-teal-400 rounded-l-xl"></div>
-                  )}
-                  
-                  <div className={`p-2 rounded-lg ${isActive ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-500 group-hover:bg-white'}`}>
-                    <MessageSquare className="w-4 h-4" />
-                  </div>
-                  <div className="flex-1 min-w-0 pt-0.5">
-                    <p className={`text-sm font-bold truncate ${isActive ? 'text-gray-900' : 'text-gray-700'}`}>{conv.title}</p>
-                    <p className="text-xs text-gray-500 font-medium mt-0.5">{dateStr}</p>
+                  <MessageSquare
+                    className={`w-4 h-4 shrink-0 mt-0.5 ${isActive ? 'text-primary' : 'text-slate-400'}`}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className={`text-sm truncate ${isActive ? 'text-slate-900 font-medium' : 'text-slate-600'}`}
+                    >
+                      {conv.title}
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-0.5">{dateStr}</p>
                   </div>
                 </button>
               );

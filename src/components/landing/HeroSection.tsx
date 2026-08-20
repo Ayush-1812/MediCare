@@ -9,15 +9,21 @@ const HeroSection = () => {
     const router = useRouter()
     const context = useContext(AppContext)
 
-    const handleGetStarted = () => {
+    const isPatient = Boolean(context?.token)
+    const isDoctor = Boolean(context?.docToken)
+    const isLoggedIn = isPatient || isDoctor
+
+    // "Get Started" only means something to a visitor who has no account yet. Someone
+    // already signed in gets the action that is actually next for them.
+    const primaryAction = isPatient
+        ? { label: 'Find a Doctor', href: '/doctors' }
+        : isDoctor
+          ? { label: 'Go to Dashboard', href: '/doctor-dashboard/dashboard' }
+          : { label: 'Get Started', href: '/login?mode=signup' }
+
+    const handlePrimaryAction = () => {
         window.scrollTo(0, 0)
-        if (context?.token) {
-            router.push('/my-profile')
-        } else if (context?.docToken) {
-            router.push('/doctor-dashboard')
-        } else {
-            router.push('/login')
-        }
+        router.push(primaryAction.href)
     }
 
     return (
@@ -37,24 +43,30 @@ const HeroSection = () => {
                 <div className='w-full lg:w-1/2 flex flex-col items-start'>
                     <div className='bg-white/40 backdrop-blur-xl border border-white/50 p-8 md:p-12 rounded-3xl shadow-lg w-full max-w-xl'>
                         <h1 className='text-4xl md:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight mb-6'>
-                            Your Personal AI <br className='hidden md:block' /> Healthcare <br className='hidden md:block' /> Companion
+                            {isLoggedIn ? (
+                                <>Welcome back to <br className='hidden md:block' /> your health <br className='hidden md:block' /> companion</>
+                            ) : (
+                                <>Your Personal AI <br className='hidden md:block' /> Healthcare <br className='hidden md:block' /> Companion</>
+                            )}
                         </h1>
                         <p className='text-gray-700 text-lg md:text-xl mb-8 leading-relaxed font-medium'>
-                            Leverage the power of advanced AI for personalized health insights, smart doctor booking, and seamless appointment management.
+                            {isLoggedIn
+                                ? 'Book a consultation, review your prescriptions, or ask Aether AI about your health records.'
+                                : 'Leverage the power of advanced AI for personalized health insights, smart doctor booking, and seamless appointment management.'}
                         </p>
                         
                         <div className='flex flex-col sm:flex-row items-center gap-4 w-full'>
-                            <button 
-                                onClick={handleGetStarted}
+                            <button
+                                onClick={handlePrimaryAction}
                                 className='w-full sm:w-auto flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-8 py-3.5 rounded-full text-base font-semibold transition-all duration-300 hover:shadow-lg hover:scale-105'
                             >
-                                Get Started <ArrowUpRight className="w-5 h-5" />
+                                {primaryAction.label} <ArrowUpRight className="w-5 h-5" />
                             </button>
-                            <a 
-                                href="#features"
+                            <a
+                                href={isPatient ? '/ai-assistant' : '#features'}
                                 className='w-full sm:w-auto flex items-center justify-center gap-2 bg-white hover:bg-gray-50 text-gray-800 border border-gray-300 px-8 py-3.5 rounded-full text-base font-semibold transition-all duration-300 hover:shadow-md'
                             >
-                                Explore Features
+                                {isPatient ? 'Ask Aether AI' : 'Explore Features'}
                             </a>
                         </div>
                     </div>

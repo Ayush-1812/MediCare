@@ -1,12 +1,13 @@
 'use client'
 
-import React, { useContext, useState } from 'react'
+import React, { Suspense, useContext, useState } from 'react'
 import { AppContext } from '@/context/AppContext'
 import { loginUser, registerUser } from '@/app/actions/userActions'
 import { registerDoctor, loginDoctor } from '@/app/actions/doctorActions'
 import { toast } from 'react-toastify'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Eye, EyeOff, Mail, Lock, User as UserIcon, Calendar, Droplet, Users, ShieldCheck } from 'lucide-react'
+import { GENDER_CHOICES, GENDER_UNSET } from '@/lib/profile'
 
 type AuthResponse = {
     success: boolean
@@ -15,8 +16,13 @@ type AuthResponse = {
     profileCompleted?: boolean
 }
 
-const Login = () => {
-    const [state, setState] = useState<'Sign Up' | 'Login'>('Sign Up')
+const LoginForm = () => {
+    // The navbar links here as ?mode=login / ?mode=signup. Without this the page always
+    // opened on Sign Up, so pressing "Login" landed people on a registration form.
+    const searchParams = useSearchParams()
+    const [state, setState] = useState<'Sign Up' | 'Login'>(
+        searchParams.get('mode') === 'login' ? 'Login' : 'Sign Up',
+    )
     const [role, setRole] = useState<'User' | 'Doctor'>('User')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
@@ -24,7 +30,7 @@ const Login = () => {
     
     // New UI fields (for visual and local validation only, not sent to backend)
     const [confirmPassword, setConfirmPassword] = useState('')
-    const [gender, setGender] = useState('Not Specified')
+    const [gender, setGender] = useState<string>(GENDER_UNSET)
     const [age, setAge] = useState('')
     const [bloodGroup, setBloodGroup] = useState('Unknown')
     const [showPassword, setShowPassword] = useState(false)
@@ -299,10 +305,10 @@ const Login = () => {
                                                 value={gender}
                                                 onChange={(e) => setGender(e.target.value)}
                                             >
-                                                <option value="Not Specified">Select</option>
-                                                <option value="Male">Male</option>
-                                                <option value="Female">Female</option>
-                                                <option value="Other">Other</option>
+                                                <option value={GENDER_UNSET}>Select</option>
+                                                {GENDER_CHOICES.map((choice) => (
+                                                    <option key={choice} value={choice}>{choice}</option>
+                                                ))}
                                             </select>
                                         </div>
                                     </div>
@@ -397,5 +403,13 @@ const Login = () => {
         </div>
     )
 }
+
+// `useSearchParams` opts a page into client-side rendering; the Suspense boundary keeps
+// the rest of the route statically prerenderable.
+const Login = () => (
+    <Suspense fallback={<div className='min-h-screen bg-blue-50' />}>
+        <LoginForm />
+    </Suspense>
+)
 
 export default Login

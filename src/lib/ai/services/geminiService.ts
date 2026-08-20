@@ -1,4 +1,4 @@
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, type Schema } from '@google/genai';
 import { PromptPackage } from '../promptManager/types';
 import {
     GEMINI_MODEL,
@@ -304,6 +304,11 @@ export class GeminiService {
                     const responseStream = await this.ai.models.generateContentStream({
                         model: GEMINI_MODEL,
                         contents: prompt,
+                        // Without passing the signal the AbortController below was inert:
+                        // a request that hung before the first chunk arrived was never
+                        // actually cancelled, and the timeout only took effect once the
+                        // stream started producing data.
+                        config: { abortSignal: controller.signal },
                     });
 
                     for await (const chunk of responseStream) {
@@ -356,5 +361,96 @@ export class GeminiService {
         const message = lastError?.message ?? 'Unknown error';
         const { userMessage } = classifyGeminiError(status, message);
         return userMessage;
+    }
+
+    // ── Public: Structured (JSON) Generation ─────────────────────────────────
+
+    /**
+     * Runs a prompt that must come back as JSON matching `responseSchema`.
+     *
+     * Unlike `generateResponse`, this THROWS on failure rather than returning a friendly
+     * string — callers that need structured data have to be able to tell a real result
+     * apart from an error message, and fall back to their own non-AI path.
+     */
+    public async generateStructured<T>(options: {
+        systemInstruction: string;
+        prompt: string;
+        responseSchema: Schema;
+        /** Defaults to 0 — this is extraction, not creative writing. */
+        temperature?: number;
+        maxOutputTokens?: number;
+        label?: string;
+    }): Promise<T> {
+        const label = options.label ?? 'generateStructured';
+        const promptSizeChars = options.systemInstruction.length + options.prompt.length;
+        const baseDiagnostics: Omit<GeminiDiagnostics, 'latencyMs'> = {
+            sdk: GEMINI_SDK,
+            model: GEMINI_MODEL,
+            timestamp: new Date().toISOString(),
+            promptSizeChars,
+            estimatedTokens: Math.ceil(promptSizeChars / 4),
+        };
+
+        let lastError: any = null;
+
+        for (let attempt = 0; attempt <= GEMINI_MAX_RETRIES; attempt++) {
+            if (attempt > 0) await sleep(GEMINI_RETRY_BASE_DELAY_MS * attempt);
+
+            const startTime = Date.now();
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
+
+            try {
+                const response = await this.ai.models.generateContent({
+                    model: GEMINI_MODEL,
+                    contents: options.prompt,
+                    config: {
+                        systemInstruction: options.systemInstruction,
+                        responseMimeType: 'application/json',
+                        responseSchema: options.responseSchema,
+                        temperature: options.temperature ?? 0,
+                        maxOutputTokens: options.maxOutputTokens ?? 2048,
+                        abortSignal: controller.signal,
+                    },
+                });
+
+                const text = response.text;
+                if (!text) throw new Error('Provider returned an empty response');
+
+                const parsed = JSON.parse(text) as T;
+
+                logDiagnostics(`${label}:SUCCESS`, {
+                    ...baseDiagnostics,
+                    latencyMs: Date.now() - startTime,
+                    httpStatus: 200,
+                    classification: 'OK',
+                });
+                return parsed;
+            } catch (error: any) {
+                lastError = error;
+                const status = error?.status ?? error?.statusCode;
+                const { classification } = classifyGeminiError(status, error?.message ?? '');
+
+                logDiagnostics(`${label}:ERROR(attempt=${attempt})`, {
+                    ...baseDiagnostics,
+                    latencyMs: Date.now() - startTime,
+                    httpStatus: status,
+                    providerMessage: error?.message,
+                    classification,
+                });
+
+                // A malformed JSON body is worth one more try; 4xx never is.
+                const retryable = isRetryable(status) || error instanceof SyntaxError;
+                if (!retryable || attempt >= GEMINI_MAX_RETRIES) break;
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        }
+
+        const { userMessage } = classifyGeminiError(
+            lastError?.status ?? lastError?.statusCode,
+            lastError?.message ?? '',
+        );
+        throw new Error(userMessage);
     }
 }

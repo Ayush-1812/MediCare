@@ -1,24 +1,30 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Mic, Paperclip } from 'lucide-react';
+import React, { useRef, useState } from 'react';
+import { ArrowUp } from 'lucide-react';
 
 interface ChatInputProps {
   onSend: (message: string) => void;
   disabled?: boolean;
 }
 
+const MAX_LENGTH = 2000;
+
 const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled }) => {
   const [input, setInput] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const resize = () => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  };
+
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (input.trim() && !disabled) {
-      onSend(input.trim());
-      setInput('');
-      if (textareaRef.current) {
-        textareaRef.current.style.height = '44px';
-      }
-    }
+    if (!input.trim() || disabled) return;
+    onSend(input.trim());
+    setInput('');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -28,75 +34,43 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled }) => {
     }
   };
 
-  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setInput(e.target.value);
-    if (textareaRef.current) {
-      textareaRef.current.style.height = '44px';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 120)}px`;
-    }
-  };
-
-  const insertPrompt = (prompt: string) => {
-    setInput(prompt);
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
-  };
-
   return (
-    <div className="w-full bg-gradient-to-t from-blue-50/90 via-blue-50/80 to-transparent pt-6 pb-6 px-4 lg:px-10 flex-shrink-0 z-30">
-      <div className="max-w-4xl mx-auto w-full flex flex-col">
-        {/* Quick Action Chips */}
-        <div className="flex flex-wrap gap-2.5 mb-4 px-1">
-          <button onClick={() => insertPrompt('What are my symptoms?')} className="bg-white/70 hover:bg-white backdrop-blur-xl border border-white/80 shadow-[0_4px_15px_-5px_rgba(0,0,0,0.05)] rounded-full px-4 py-2 text-[13px] font-bold text-gray-700 flex items-center gap-2 transition-all duration-300 hover:shadow-[0_8px_20px_-8px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 group">
-            <span className="text-base group-hover:scale-110 transition-transform">⚕️</span> Symptoms
-          </button>
-          <button onClick={() => insertPrompt('Show my medicines')} className="bg-white/70 hover:bg-white backdrop-blur-xl border border-white/80 shadow-[0_4px_15px_-5px_rgba(0,0,0,0.05)] rounded-full px-4 py-2 text-[13px] font-bold text-gray-700 flex items-center gap-2 transition-all duration-300 hover:shadow-[0_8px_20px_-8px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 group">
-            <span className="text-base group-hover:scale-110 transition-transform">💊</span> Medicines
-          </button>
-          <button onClick={() => insertPrompt('View my timeline')} className="bg-white/70 hover:bg-white backdrop-blur-xl border border-white/80 shadow-[0_4px_15px_-5px_rgba(0,0,0,0.05)] rounded-full px-4 py-2 text-[13px] font-bold text-gray-700 flex items-center gap-2 transition-all duration-300 hover:shadow-[0_8px_20px_-8px_rgba(0,0,0,0.1)] hover:-translate-y-0.5 group">
-            <span className="text-base group-hover:scale-110 transition-transform">📅</span> Timeline
-          </button>
-        </div>
-
-        {/* Input Bar */}
-        <form 
+    <div className="shrink-0 border-t border-slate-200 bg-white px-4 py-4 sm:px-6">
+      <div className="max-w-3xl mx-auto w-full">
+        <form
           onSubmit={handleSubmit}
-          className="bg-white/90 backdrop-blur-2xl border border-white/80 shadow-[0_10px_40px_-10px_rgba(0,0,0,0.1)] rounded-3xl px-4 py-3 sm:px-6 sm:py-3.5 flex items-end gap-3 focus-within:bg-white focus-within:ring-4 focus-within:ring-blue-100/50 transition-all duration-300 hover:shadow-[0_15px_50px_-12px_rgba(0,0,0,0.15)] w-full"
+          className="border border-slate-300 rounded-2xl px-3 py-2 flex items-end gap-2 bg-white focus-within:border-slate-400 transition-colors"
         >
           <textarea
             ref={textareaRef}
             value={input}
-            onChange={handleInput}
+            onChange={(e) => {
+              setInput(e.target.value.slice(0, MAX_LENGTH));
+              resize();
+            }}
             onKeyDown={handleKeyDown}
             disabled={disabled}
-            placeholder="Ask anything about your health..."
-            className="flex-1 max-h-32 min-h-[24px] py-2 sm:py-3 bg-transparent outline-none resize-none text-[15px] text-gray-800 placeholder:text-gray-400 font-medium disabled:opacity-50 w-full"
+            placeholder="Ask about your appointments, prescriptions or symptoms..."
             rows={1}
-            style={{ height: '44px' }}
+            className="flex-1 max-h-40 py-2 px-1 bg-transparent outline-none resize-none text-[15px] text-slate-800 placeholder:text-slate-400 disabled:opacity-50"
           />
-          <div className="flex items-center gap-2 sm:gap-3 pb-1">
-            <button type="button" className="hidden sm:flex text-gray-400 hover:text-blue-500 hover:bg-blue-50 p-2.5 rounded-full transition-all">
-              <Mic className="w-[18px] h-[18px]" />
-            </button>
-            <button type="button" className="hidden sm:flex text-gray-400 hover:text-blue-500 hover:bg-blue-50 p-2.5 rounded-full transition-all">
-              <Paperclip className="w-[18px] h-[18px]" />
-            </button>
-            <button
-              type="submit"
-              disabled={!input.trim() || disabled}
-              className={`p-3 rounded-full flex-shrink-0 transition-all duration-300 ${
-                input.trim() && !disabled
-                  ? 'bg-gradient-to-r from-blue-600 to-teal-500 text-white shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 hover:scale-105'
-                  : 'bg-gray-100 text-gray-400 cursor-not-allowed scale-100'
-              }`}
-            >
-              <Send className="w-[18px] h-[18px] sm:ml-0.5" />
-            </button>
-          </div>
+          {/* The old bar also had Mic and Paperclip buttons that were wired to nothing. */}
+          <button
+            type="submit"
+            disabled={!input.trim() || disabled}
+            aria-label="Send message"
+            className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mb-0.5 transition-colors ${
+              input.trim() && !disabled
+                ? 'bg-slate-900 text-white hover:bg-slate-700'
+                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+            }`}
+          >
+            <ArrowUp className="w-4.5 h-4.5" />
+          </button>
         </form>
-        <p className="text-center text-[11px] font-medium text-gray-400 mt-4 opacity-70">
-          Aether AI can make mistakes. Please verify important medical information with your doctor.
+
+        <p className="text-center text-[11px] text-slate-400 mt-2.5">
+          Aether AI can make mistakes. Verify important medical information with your doctor.
         </p>
       </div>
     </div>
@@ -104,4 +78,3 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSend, disabled }) => {
 };
 
 export default ChatInput;
-

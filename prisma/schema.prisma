@@ -24,6 +24,15 @@ model User {
   gender       String        @default("Not Selected")
   dob          String        @default("Not Selected")
   phone        String        @default("0000000000")
+
+  // --- Health profile: optional, filled in from "Complete your health profile" ---
+  // All nullable on purpose: the dashboard shows these cards only once real values
+  // exist, rather than displaying placeholder numbers.
+  heightCm    Int?
+  weightKg    Float?
+  bloodGroup  String?
+  allergies   String?
+
   appointments   Appointment[]
   prescriptions  Prescription[]
   conversations  Conversation[]
@@ -106,9 +115,20 @@ model Prescription {
   id            String   @id @default(cuid())
   userId        String
   user          User     @relation(fields: [userId], references: [id])
-  imageUrl      String
+  imageUrl      String   @db.Text
   extractedData Json?    @default("{}")
   medicines     Json     @default("[]")
+
+  // The handwritten content of the prescription, kept as text alongside the image.
+  // `rawText` is the OCR output verbatim so nothing the scan read is ever lost, and
+  // `notes` holds the advice / follow-up lines after the patient has reviewed them.
+  rawText String? @db.Text
+  notes   String? @db.Text
+
+  // Provenance for the extraction, so a low-quality scan is identifiable later.
+  ocrEngine     String?
+  ocrConfidence Float?
+
   isVerified    Boolean  @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
