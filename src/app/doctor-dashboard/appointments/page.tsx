@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import { Video, Check, X, CreditCard, Banknote } from 'lucide-react'
 import { formatINR } from '@/lib/currency'
 import { avatarFor } from '@/lib/avatar'
+import { appointmentStatus, formatSlotDate, STATUS_STYLES } from '@/lib/appointment'
 
 const Appointments = () => {
     const [appointments, setAppointments] = useState<any[]>([])
@@ -87,25 +88,31 @@ const Appointments = () => {
                                     {item.payment ? 'ONLINE' : 'CASH'}
                                 </span>
                             </div>
-                            <p className='text-sm'>{item.slotDate}, {item.slotTime}</p>
+                            <p className='text-sm'>{formatSlotDate(item.slotDate)}, {item.slotTime}</p>
                             <p className='font-semibold text-gray-800'>{formatINR(item.amount)}</p>
-                            {item.cancelled ? (
-                                <span className='text-red-500 bg-red-50 text-xs font-semibold px-3 py-1.5 rounded-full w-fit'>Cancelled</span>
-                            ) : item.isCompleted ? (
-                                <span className='text-emerald-600 bg-emerald-50 text-xs font-semibold px-3 py-1.5 rounded-full w-fit'>Completed</span>
-                            ) : (
-                                <div className='flex gap-2'>
-                                    <button onClick={() => handleVideoCall(item.id)} className='text-xs bg-primary text-white px-3 py-2 rounded-lg font-semibold flex items-center gap-1.5 hover:bg-primary/90 hover:-translate-y-0.5 transition-all shadow-sm'>
-                                        <Video className='w-3.5 h-3.5' /> Call
-                                    </button>
-                                    <button onClick={() => cancelAppointment(item.id)} className='w-9 h-9 flex items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors' aria-label='Cancel'>
-                                        <X className='w-4 h-4' />
-                                    </button>
-                                    <button onClick={() => completeAppointment(item.id)} className='w-9 h-9 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors' aria-label='Complete'>
-                                        <Check className='w-4 h-4' />
-                                    </button>
-                                </div>
-                            )}
+                            {(() => {
+                                const status = appointmentStatus(item)
+                                if (status === 'Scheduled') {
+                                    return (
+                                        <div className='flex gap-2'>
+                                            <button onClick={() => handleVideoCall(item.id)} className='text-xs bg-primary text-white px-3 py-2 rounded-lg font-semibold flex items-center gap-1.5 hover:bg-primary/90 hover:-translate-y-0.5 transition-all shadow-sm'>
+                                                <Video className='w-3.5 h-3.5' /> Call
+                                            </button>
+                                            <button onClick={() => cancelAppointment(item.id)} className='w-9 h-9 flex items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors' aria-label='Cancel'>
+                                                <X className='w-4 h-4' />
+                                            </button>
+                                            <button onClick={() => completeAppointment(item.id)} className='w-9 h-9 flex items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors' aria-label='Complete'>
+                                                <Check className='w-4 h-4' />
+                                            </button>
+                                        </div>
+                                    )
+                                }
+                                return (
+                                    <span className={`text-xs font-semibold px-3 py-1.5 rounded-full w-fit border ${STATUS_STYLES[status]}`}>
+                                        {status}
+                                    </span>
+                                )
+                            })()}
                         </div>
                     ))}
                 </div>

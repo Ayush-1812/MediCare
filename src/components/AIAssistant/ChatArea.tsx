@@ -16,41 +16,36 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeId, onConversationCreated, on
   const [messages, setMessages] = useState<MessageProps[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isFetchingHistory, setIsFetchingHistory] = useState(false);
-  
-  // Scrolling State
+
   const [isAutoScrollEnabled, setIsAutoScrollEnabled] = useState(true);
   const [showScrollButton, setShowScrollButton] = useState(false);
-  
+
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   // Set right before we tell the parent about a conversation id we just created ourselves —
   // lets the [activeId] effect below skip its history refetch, since local state already has
   // the live (streaming) message and a refetch would just flash a spinner over it.
   const skipNextHistoryFetchRef = useRef(false);
 
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    // Scroll only the message list itself, not `scrollIntoView` — this page's outer
-    // document can scroll too (navbar + full-height panel + footer), and `scrollIntoView`
-    // walks every scrollable ancestor, which was dragging the whole page down to the
-    // footer instead of staying inside the chat panel.
+    // Scroll only the message list itself, not `scrollIntoView` — that walks every
+    // scrollable ancestor and would drag the whole page instead of staying in the panel.
     if (scrollContainerRef.current) {
-      scrollContainerRef.current.scrollTo({ top: scrollContainerRef.current.scrollHeight, behavior });
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior,
+      });
     }
   };
 
-  // Keep latest streamed content visible if auto-scroll is enabled
   useEffect(() => {
     if (isAutoScrollEnabled) {
-      // Use 'auto' behavior during fast streaming to prevent jitter and animation queues, 
-      // but if it's a single message addition, 'smooth' is naturally handled.
-      // We default to 'auto' for stream updates so it stays pinned without flickering.
       scrollToBottom(isLoading ? 'auto' : 'smooth');
     }
   }, [messages, isAutoScrollEnabled, isLoading]);
 
   useEffect(() => {
     if (!activeId) {
-      setMessages([]); // New Chat
+      setMessages([]);
       setIsAutoScrollEnabled(true);
       setShowScrollButton(false);
       return;
@@ -68,12 +63,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeId, onConversationCreated, on
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.conversation) {
-            setMessages(data.conversation.messages.map((m: any) => ({
-              id: m.id,
-              role: m.role,
-              content: m.content
-            })));
-            // Reset scroll state on load
+            setMessages(
+              data.conversation.messages.map((m: any) => ({
+                id: m.id,
+                role: m.role,
+                content: m.content,
+              })),
+            );
             setIsAutoScrollEnabled(true);
             setShowScrollButton(false);
             setTimeout(() => scrollToBottom('auto'), 100);
@@ -92,45 +88,32 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeId, onConversationCreated, on
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    
-    // If the user scrolls up by more than 100px from the bottom, they are manually scrolling.
     const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
-    
     setIsAutoScrollEnabled(isNearBottom);
     setShowScrollButton(!isNearBottom);
-  };
-
-  const handleScrollToBottom = () => {
-    setIsAutoScrollEnabled(true);
-    setShowScrollButton(false);
-    scrollToBottom('smooth');
   };
 
   const handleSend = async (userMessage: string) => {
     if (isLoading || isFetchingHistory) return;
 
-    // Force auto-scroll to true when sending a new message
     setIsAutoScrollEnabled(true);
     setShowScrollButton(false);
     setIsLoading(true);
 
-    const newUserMsg: MessageProps = {
-      id: Date.now().toString(),
-      role: 'USER',
-      content: userMessage
-    };
+    const assistantMsgId = `assistant-${Date.now()}`;
+    setMessages(prev => [
+      ...prev,
+      { id: `user-${Date.now()}`, role: 'USER', content: userMessage },
+      { id: assistantMsgId, role: 'ASSISTANT', content: '' },
+    ]);
 
-    setMessages(prev => [...prev, newUserMsg]);
-
-    const assistantMsgId = (Date.now() + 1).toString();
-    setMessages(prev => [...prev, {
-      id: assistantMsgId,
-      role: 'ASSISTANT',
-      content: ''
-    }]);
-
-    // Ensure we scroll immediately when the user message appears
     setTimeout(() => scrollToBottom('smooth'), 0);
+
+    /** Puts an error into the pending assistant bubble instead of leaving it blank. */
+    const failWith = (text: string) =>
+      setMessages(prev =>
+        prev.map(msg => (msg.id === assistantMsgId ? { ...msg, content: text } : msg)),
+      );
 
     try {
       const res = await fetch('/api/chat', {
@@ -139,8 +122,13 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeId, onConversationCreated, on
         body: JSON.stringify({ message: userMessage, conversationId: activeId }),
       });
 
+      if (res.status === 401) {
+        failWith('Your session has expired. Please sign in again to keep chatting.');
+        return;
+      }
       if (!res.ok) {
-        throw new Error('Failed to send message');
+        failWith('Something went wrong reaching the assistant. Please try again.');
+        return;
       }
 
       const newConvId = res.headers.get('X-Conversation-Id');
@@ -150,100 +138,100 @@ const ChatArea: React.FC<ChatAreaProps> = ({ activeId, onConversationCreated, on
       }
 
       const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
+      if (!reader) {
+        failWith('Something went wrong reaching the assistant. Please try again.');
+        return;
+      }
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          const chunk = decoder.decode(value);
-          setMessages(prev => prev.map(msg => 
-            msg.id === assistantMsgId 
-              ? { ...msg, content: msg.content + chunk } 
-              : msg
-          ));
-        }
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        // `stream: true` matters: without it a multi-byte character split across two
+        // chunks decodes as replacement characters, which mangles the emoji and accents
+        // the assistant's formatted replies are full of.
+        const chunk = decoder.decode(value, { stream: true });
+        setMessages(prev =>
+          prev.map(msg => (msg.id === assistantMsgId ? { ...msg, content: msg.content + chunk } : msg)),
+        );
+      }
+
+      const tail = decoder.decode();
+      if (tail) {
+        setMessages(prev =>
+          prev.map(msg => (msg.id === assistantMsgId ? { ...msg, content: msg.content + tail } : msg)),
+        );
       }
     } catch (error) {
       console.error('Chat error:', error);
-      setMessages(prev => [...prev, {
-        id: Date.now().toString(),
-        role: 'ASSISTANT',
-        content: 'Error: Could not connect to the server.'
-      }]);
+      failWith('Could not connect to the server. Please check your connection and try again.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="flex-1 flex flex-col relative h-full w-full overflow-hidden">
-      {/* Header (Fixed at top) */}
-      <div className="flex-shrink-0 flex items-center justify-between gap-3 p-4 sm:p-6 pb-4 lg:p-8 lg:pb-6 border-b border-white/20 bg-transparent z-20">
-        <div className="flex items-center gap-3 min-w-0">
-          <button
-            onClick={onOpenSidebar}
-            className="lg:hidden p-2 -ml-1 rounded-xl bg-white/60 hover:bg-white text-slate-600 border border-white/70 shadow-sm transition-colors shrink-0"
-            aria-label="Open conversations"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-          <div className="min-w-0">
-            <h2 className="text-2xl sm:text-3xl font-black text-slate-800 tracking-tight truncate">Aether AI</h2>
-            <p className="text-xs sm:text-sm text-slate-500 font-medium mt-1 hidden sm:block">Your Personal Healthcare Intelligence</p>
-          </div>
-        </div>
-        <div className="hidden sm:flex items-center gap-2.5 bg-white/50 backdrop-blur-md px-4 py-2 rounded-full border border-white/60 shadow-sm shrink-0">
-          <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]"></span>
-          <span className="text-xs font-bold text-green-700 tracking-wide uppercase">System Active</span>
+    <div className="flex-1 flex flex-col h-full w-full min-w-0 relative">
+      {/* Header */}
+      <div className="shrink-0 flex items-center gap-3 px-4 sm:px-6 py-4 border-b border-slate-200">
+        <button
+          onClick={onOpenSidebar}
+          className="lg:hidden p-2 -ml-2 rounded-lg text-slate-500 hover:bg-slate-100 transition-colors shrink-0"
+          aria-label="Open conversations"
+        >
+          <Menu className="w-5 h-5" />
+        </button>
+        <div className="min-w-0">
+          <h2 className="text-base font-semibold text-slate-900 truncate">Aether AI</h2>
+          <p className="text-xs text-slate-500">Your personal healthcare assistant</p>
         </div>
       </div>
 
-      {/* Messages Area (Scrollable) */}
-      <div 
+      {/* Messages */}
+      <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto custom-scrollbar p-6 lg:p-10 pb-0 relative z-10 w-full"
+        className="flex-1 overflow-y-auto custom-scrollbar px-4 sm:px-6 py-6"
       >
         {isFetchingHistory ? (
-          <div className="flex justify-center items-center h-full text-gray-500">
-            <span className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></span>
-              <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></span>
-              <span className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></span>
+          <div className="flex justify-center items-center h-full">
+            <span className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
+              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></span>
+              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></span>
             </span>
           </div>
         ) : messages.length === 0 ? (
           <EmptyState onSelectPrompt={handleSend} />
         ) : (
-          <div className="max-w-4xl mx-auto w-full flex flex-col justify-end min-h-full pb-4">
+          <div className="max-w-3xl mx-auto w-full">
             {messages.map((msg) => (
               <MessageBubble key={msg.id} message={msg} />
             ))}
-            <div ref={messagesEndRef} className="h-4" />
           </div>
         )}
       </div>
 
-      {/* Floating Scroll to Bottom Button */}
       {showScrollButton && (
-        <div className="absolute bottom-32 left-0 right-0 flex justify-center z-20 pointer-events-none">
-          <button 
-            onClick={handleScrollToBottom}
-            className="pointer-events-auto flex items-center gap-2 bg-white/90 backdrop-blur-md border border-gray-200 shadow-lg text-gray-700 text-sm font-bold py-2 px-4 rounded-full hover:bg-white hover:text-blue-600 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
+        <div className="absolute bottom-28 left-0 right-0 flex justify-center pointer-events-none">
+          <button
+            onClick={() => {
+              setIsAutoScrollEnabled(true);
+              setShowScrollButton(false);
+              scrollToBottom('smooth');
+            }}
+            className="pointer-events-auto flex items-center gap-1.5 bg-white border border-slate-200 shadow-sm text-slate-600 text-xs font-medium py-1.5 px-3 rounded-full hover:bg-slate-50 transition-colors"
           >
-            <ArrowDown className="w-4 h-4" />
-            Scroll to Latest
+            <ArrowDown className="w-3.5 h-3.5" />
+            Latest
           </button>
         </div>
       )}
 
-      {/* Input Area (Fixed at bottom) */}
       <ChatInput onSend={handleSend} disabled={isLoading || isFetchingHistory} />
     </div>
   );
 };
 
 export default ChatArea;
-

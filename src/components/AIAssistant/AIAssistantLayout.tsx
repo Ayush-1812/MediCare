@@ -4,8 +4,15 @@ import React, { useState } from 'react';
 import { X } from 'lucide-react';
 import ChatSidebar from './ChatSidebar';
 import ChatArea from './ChatArea';
-import HealthInsightsSidebar from './HealthInsightsSidebar';
 
+/**
+ * Two columns only: conversation list and the chat itself.
+ *
+ * The old third column ("Action Center") held three cards that were hard-coded to their
+ * empty state — they never read appointments, prescriptions or reports — so it cost a
+ * third of the width to say "nothing here" three times. The surrounding glass/gradient
+ * treatment went with it: a chat reads better on a plain surface.
+ */
 const AIAssistantLayout: React.FC = () => {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [refreshSidebarKey, setRefreshSidebarKey] = useState(0);
@@ -27,32 +34,32 @@ const AIAssistantLayout: React.FC = () => {
   };
 
   return (
-    <div className="relative min-h-screen bg-blue-50 p-0 sm:p-6 lg:p-10 flex items-center justify-center font-sans overflow-hidden">
+    <div className="bg-slate-50 sm:p-6 lg:p-8 flex justify-center font-sans">
 
-      {/* Home Page Consistent Background Pattern */}
-      <div
-          className="absolute inset-0 z-0 opacity-40 bg-cover bg-center mix-blend-multiply"
-          style={{ backgroundImage: "url('/assets/header_img.png')" }}
-      ></div>
-      <div className="absolute inset-0 bg-gradient-to-br from-blue-100/90 via-blue-50/70 to-teal-50/40 z-0"></div>
-
-      {/* Background Decorative Blob */}
-      <div className="absolute top-[-10%] right-[-5%] w-[40rem] h-[40rem] bg-teal-400/20 rounded-full blur-3xl opacity-50 z-0 animate-pulse" style={{ animationDuration: '8s' }}></div>
-      <div className="absolute bottom-[-10%] left-[-5%] w-[40rem] h-[40rem] bg-blue-500/20 rounded-full blur-3xl opacity-50 z-0 animate-pulse" style={{ animationDuration: '10s' }}></div>
-
-      {/* Mobile/tablet conversation drawer + backdrop live OUTSIDE the backdrop-blur-2xl panel below:
-          a `backdrop-filter` ancestor becomes the containing block for `position: fixed`
-          descendants, which would shrink these to the panel's box instead of the viewport. */}
+      {/* Mobile drawer + backdrop live outside the panel below: a `backdrop-filter` or
+          `transform` ancestor becomes the containing block for `position: fixed`
+          descendants, which would shrink these to the panel instead of the viewport. */}
       {mobileSidebarOpen && (
-        <div className="lg:hidden fixed inset-0 bg-black/30 backdrop-blur-sm z-40 animate-fade-in" onClick={() => setMobileSidebarOpen(false)} />
+        <div
+          className="lg:hidden fixed inset-0 bg-slate-900/30 z-40"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
       )}
-      <div className={`lg:hidden fixed top-0 left-0 bottom-0 z-50 w-[85%] max-w-[320px] bg-white shadow-2xl transition-transform duration-300 ease-out ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex items-center justify-end px-4 pt-4">
-          <button onClick={() => setMobileSidebarOpen(false)} className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors" aria-label="Close conversations">
+      <div
+        className={`lg:hidden fixed top-0 left-0 bottom-0 z-50 w-[85%] max-w-[320px] bg-white border-r border-slate-200 shadow-xl transition-transform duration-200 ease-out ${
+          mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+        }`}
+      >
+        <div className="flex items-center justify-end px-3 pt-3">
+          <button
+            onClick={() => setMobileSidebarOpen(false)}
+            className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg transition-colors"
+            aria-label="Close conversations"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="h-[calc(100%-56px)]">
+        <div className="h-[calc(100%-48px)]">
           <ChatSidebar
             activeId={activeConversationId}
             onSelect={handleSelectConversation}
@@ -62,10 +69,10 @@ const AIAssistantLayout: React.FC = () => {
         </div>
       </div>
 
-      <div className="relative z-10 w-full max-w-[1500px] h-[100vh] sm:h-[92vh] bg-white/40 backdrop-blur-2xl sm:rounded-[2.5rem] border border-white/70 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.1)] overflow-hidden flex flex-col lg:flex-row transition-all hover:shadow-[0_25px_60px_-15px_rgba(0,0,0,0.15)]">
+      <div className="w-full max-w-6xl h-dvh sm:h-[85vh] bg-white sm:rounded-2xl border border-slate-200 sm:shadow-sm overflow-hidden flex">
 
-        {/* Left Sidebar (desktop) */}
-        <div className="hidden lg:flex w-[320px] flex-shrink-0 bg-white/30 border-r border-white/60 flex-col">
+        {/* Conversation list */}
+        <div className="hidden lg:flex w-70 shrink-0 border-r border-slate-200 flex-col bg-slate-50/60">
           <ChatSidebar
             activeId={activeConversationId}
             onSelect={handleSelectConversation}
@@ -74,22 +81,13 @@ const AIAssistantLayout: React.FC = () => {
           />
         </div>
 
-        {/* Center Chat Area */}
-        <div className="flex-1 flex flex-col relative min-w-0 bg-transparent">
+        {/* Chat */}
+        <div className="flex-1 flex flex-col min-w-0">
           <ChatArea
             activeId={activeConversationId}
             onConversationCreated={handleConversationCreated}
             onOpenSidebar={() => setMobileSidebarOpen(true)}
           />
-        </div>
-
-        {/* Right Sidebar (Health Insights) — gated to 2xl+: at common 1280-1440px laptop
-            widths, showing both 320px side panels left only ~280px for the center chat
-            column, which was too narrow for the header and input bar (truncating text,
-            collapsing the textarea to zero width). Center content takes priority until
-            there's genuinely enough room for a third column. */}
-        <div className="hidden 2xl:flex w-[340px] flex-shrink-0 bg-white/30 border-l border-white/60 p-8 flex-col overflow-y-auto custom-scrollbar shadow-[-10px_0_30px_-15px_rgba(0,0,0,0.05)]">
-          <HealthInsightsSidebar />
         </div>
 
       </div>

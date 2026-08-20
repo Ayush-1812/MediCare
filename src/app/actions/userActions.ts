@@ -6,6 +6,13 @@ import { revalidatePath } from 'next/cache'
 import { v2 as cloudinary } from 'cloudinary'
 import { createSession, destroySession, getSessionId } from '@/lib/auth'
 import { toSlotMap } from '@/lib/schedule'
+import {
+    BLOOD_GROUPS,
+    DOB_UNSET,
+    isValidPhone,
+    normalizeGender,
+    PHONE_UNSET,
+} from '@/lib/profile'
 import type { Prisma } from '@prisma/client'
 
 cloudinary.config({
@@ -65,8 +72,9 @@ export async function registerUser(formData: FormData) {
                 email,
                 password: hashedPassword,
                 // Captured at sign-up so we can show the right default avatar before the
-                // patient uploads a photo.
-                ...(gender ? { gender } : {}),
+                // patient uploads a photo. Normalised because the form's "unset" option
+                // must land on the same string the profile page's <select> offers.
+                gender: normalizeGender(gender),
             },
         })
 
@@ -118,6 +126,10 @@ export async function getProfile() {
                 gender: true,
                 dob: true,
                 phone: true,
+                heightCm: true,
+                weightKg: true,
+                bloodGroup: true,
+                allergies: true,
             },
         })
         if (!user) return fail('User not found')
@@ -135,8 +147,8 @@ export async function updateProfile(formData: FormData) {
 
         const name = ((formData.get('name') as string) ?? '').trim()
         const phone = ((formData.get('phone') as string) ?? '').trim()
-        const gender = ((formData.get('gender') as string) ?? '').trim() || 'Not Selected'
-        const dob = ((formData.get('dob') as string) ?? '').trim() || 'Not Selected'
+        const gender = normalizeGender(formData.get('gender') as string | null)
+        const dob = ((formData.get('dob') as string) ?? '').trim() || DOB_UNSET
         const rawAddress = formData.get('address') as string | null
 
         if (!name) return fail('Name is required')
@@ -319,5 +331,92 @@ export async function cancelAppointment(appointmentId: string) {
         return { success: true as const, message: 'Appointment Cancelled' }
     } catch (error) {
         return unexpected('cancelAppointment', error)
+    }
+}
+
+// ─── Complete your profile ───────────────────────────────────────────────────
+
+/**
+ * Saves everything behind the "Complete your profile" form: date of birth, phone,
+ * address and gender alongside the health details.
+ *
+ * Every field is optional and clears to null / the unset sentinel rather than to 0 or an
+ * empty string, so the dashboard can tell "not provided yet" apart from a real value and
+ * hide the card instead of rendering a placeholder.
+ */
+export async function updateProfileDetails(formData: FormData) {
+    try {
+        const userId = await getSessionId('user')
+        if (!userId) return fail('Your session has expired. Please sign in again.')
+
+        const gender = normalizeGender(formData.get('gender') as string | null)
+        const rawDob = ((formData.get('dob') as string) ?? '').trim()
+        const rawPhone = ((formData.get('phone') as string) ?? '').trim()
+        const line1 = ((formData.get('addressLine1') as string) ?? '').trim()
+        const line2 = ((formData.get('addressLine2') as string) ?? '').trim()
+        const rawHeight = ((formData.get('heightCm') as string) ?? '').trim()
+        const rawWeight = ((formData.get('weightKg') as string) ?? '').trim()
+        const bloodGroup = ((formData.get('bloodGroup') as string) ?? '').trim()
+        const allergies = ((formData.get('allergies') as string) ?? '').trim()
+
+        let dob = DOB_UNSET
+        if (rawDob) {
+            const parsed = new Date(rawDob)
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDob) || Number.isNaN(parsed.getTime())) {
+                return fail('Enter a valid date of birth')
+            }
+            // A birth date in the future, or implausibly far back, is a typo.
+            const now = new Date()
+            if (parsed.getTime() > now.getTime()) return fail('Date of birth cannot be in the future')
+            if (now.getFullYear() - parsed.getFullYear() > 120) return fail('Enter a valid date of birth')
+            dob = rawDob
+        }
+
+        if (rawPhone && !isValidPhone(rawPhone)) {
+            return fail('Enter a valid phone number')
+        }
+
+        let heightCm: number | null = null
+        if (rawHeight) {
+            heightCm = Number.parseInt(rawHeight, 10)
+            if (!Number.isFinite(heightCm) || heightCm < 30 || heightCm > 275) {
+                return fail('Enter a height between 30 and 275 cm')
+            }
+        }
+
+        let weightKg: number | null = null
+        if (rawWeight) {
+            weightKg = Number.parseFloat(rawWeight)
+            if (!Number.isFinite(weightKg) || weightKg < 1 || weightKg > 500) {
+                return fail('Enter a weight between 1 and 500 kg')
+            }
+        }
+
+        if (bloodGroup && !BLOOD_GROUPS.includes(bloodGroup as (typeof BLOOD_GROUPS)[number])) {
+            return fail('Select a valid blood group')
+        }
+
+        if (allergies.length > 500) {
+            return fail('Please keep allergies under 500 characters')
+        }
+
+        await prisma.user.update({
+            where: { id: userId },
+            data: {
+                gender,
+                dob,
+                phone: rawPhone || PHONE_UNSET,
+                address: { line1, line2 },
+                heightCm,
+                weightKg,
+                bloodGroup: bloodGroup || null,
+                allergies: allergies || null,
+            },
+        })
+
+        revalidatePath('/my-profile')
+        return { success: true as const, message: 'Profile saved' }
+    } catch (error) {
+        return unexpected('updateProfileDetails', error)
     }
 }
