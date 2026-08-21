@@ -7,12 +7,15 @@ import { toast } from 'react-toastify'
 import { useRouter } from 'next/navigation'
 import { CalendarDays, MapPin, Video, XCircle, CheckCircle2, CreditCard, AlertTriangle, Clock } from 'lucide-react'
 import { avatarFor } from '@/lib/avatar'
-import { appointmentStatus, formatSlotDate } from '@/lib/appointment'
+import { appointmentStatus, consultationJoinState, formatSlotDate } from '@/lib/appointment'
 
 const MyAppointments = () => {
     const { token } = useContext(AppContext)
     const [appointments, setAppointments] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    // Whether the room is open depends on the clock, not just on the data. Ticking once a
+    // minute lets "Join Video Call" light up on its own instead of needing a page reload.
+    const [now, setNow] = useState(() => new Date())
     const router = useRouter()
 
     const getAppointments = async () => {
@@ -50,6 +53,11 @@ const MyAppointments = () => {
             getAppointments()
         }
     }, [token])
+
+    useEffect(() => {
+        const interval = setInterval(() => setNow(new Date()), 60_000)
+        return () => clearInterval(interval)
+    }, [])
 
     return (
         <div className='min-h-screen pb-16'>
@@ -103,9 +111,15 @@ const MyAppointments = () => {
                                     // Status is derived, not read off a single flag: an appointment
                                     // whose slot has passed without being completed is a no-show,
                                     // and must not keep offering "Join call" or "Cancel".
-                                    const status = appointmentStatus(item)
+                                    const status = appointmentStatus(item, now)
 
                                     if (status === 'Scheduled') {
+                                        // The join button used to render only once `meetingId` existed —
+                                        // and that is written by the doctor pressing Start, so patients
+                                        // had no way into the room at all. It is always offered now, and
+                                        // simply opens the waiting room until the doctor lets them in.
+                                        const join = consultationJoinState(item, now)
+
                                         return (
                                             <>
                                                 {item.payment && (
@@ -113,10 +127,17 @@ const MyAppointments = () => {
                                                         <CreditCard className='w-4 h-4' /> Paid
                                                     </span>
                                                 )}
-                                                {item.meetingId && (
-                                                    <button onClick={() => router.push(`/video-call/${item.id}`)} className='flex items-center justify-center gap-1.5 text-sm text-white text-center py-2.5 rounded-xl bg-primary hover:bg-primary/90 hover:-translate-y-0.5 transition-all shadow-sm font-semibold'>
-                                                        <Video className='w-4 h-4' /> Join Video Call
-                                                    </button>
+                                                <button
+                                                    onClick={() => router.push(`/video-call/${item.id}`)}
+                                                    disabled={!join.canJoin}
+                                                    title={join.reason}
+                                                    className='flex items-center justify-center gap-1.5 text-sm text-white text-center py-2.5 rounded-xl bg-primary hover:bg-primary/90 hover:-translate-y-0.5 transition-all shadow-sm font-semibold disabled:bg-gray-200 disabled:text-gray-400 disabled:hover:translate-y-0 disabled:shadow-none disabled:cursor-not-allowed'
+                                                >
+                                                    <Video className='w-4 h-4' />
+                                                    {item.meetingId ? 'Join Video Call' : 'Video Consultation'}
+                                                </button>
+                                                {!join.canJoin && join.reason && (
+                                                    <p className='text-[11px] text-gray-400 text-center -mt-1'>{join.reason}</p>
                                                 )}
                                                 <button onClick={() => handleCancelAppointment(item.id)} className='flex items-center justify-center gap-1.5 text-sm text-gray-500 text-center py-2.5 rounded-xl border border-gray-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all font-semibold'>
                                                     <XCircle className='w-4 h-4' /> Cancel Appointment

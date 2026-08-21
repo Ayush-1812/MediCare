@@ -6,6 +6,8 @@ import { revalidatePath } from 'next/cache'
 import { v2 as cloudinary } from 'cloudinary'
 import { createSession, destroySession, getSessionId } from '@/lib/auth'
 import { toSlotMap } from '@/lib/schedule'
+import { after } from 'next/server'
+import { sendAppointmentBookedEmails } from '@/lib/mail/appointmentEmails'
 import {
     BLOOD_GROUPS,
     DOB_UNSET,
@@ -219,10 +221,24 @@ export async function bookAppointment(docId: string, slotDate: string, slotTime:
         // the same slot at once both read it as free and both write their own version of
         // the JSON, so one booking silently overwrites the other's hold. Doing the check
         // and both writes inside one transaction keeps the slot list consistent.
-        await prisma.$transaction(async (tx) => {
+        const booking = await prisma.$transaction(async (tx) => {
             const current = await tx.doctor.findUnique({
                 where: { id: docId },
-                select: { slots_booked: true, fees: true, name: true, image: true, speciality: true, address: true },
+                select: {
+                    slots_booked: true,
+                    fees: true,
+                    name: true,
+                    image: true,
+                    speciality: true,
+                    address: true,
+                    // Only needed to address the confirmation email to the doctor.
+                    email: true,
+                    degree: true,
+                    experience: true,
+                    hospital: true,
+                    city: true,
+                    phone: true,
+                },
             })
             if (!current) throw new Error('DOCTOR_NOT_FOUND')
 
@@ -230,7 +246,7 @@ export async function bookAppointment(docId: string, slotDate: string, slotTime:
             const existing = slots[slotDate] ?? []
             if (existing.includes(slotTime)) throw new Error('SLOT_TAKEN')
 
-            await tx.appointment.create({
+            const appointment = await tx.appointment.create({
                 data: {
                     userId,
                     docId,
@@ -246,12 +262,58 @@ export async function bookAppointment(docId: string, slotDate: string, slotTime:
                     amount: current.fees ?? 0,
                     date: Math.floor(Date.now() / 1000),
                 },
+                select: { id: true, amount: true },
             })
 
             await tx.doctor.update({
                 where: { id: docId },
                 data: { slots_booked: { ...slots, [slotDate]: [...existing, slotTime] } },
             })
+
+            return { appointment, doctor: current }
+        })
+
+        // Confirmation emails are handed to `after()`, which runs them once the response has
+        // already been sent. Awaiting them inline made every booking wait on Gmail — roughly
+        // 2.5s just to open and authenticate the connection — for a result the patient never
+        // sees. `after()` is the serverless-safe way to do this: a bare floating promise can
+        // be killed the moment the function returns, whereas the platform keeps the
+        // invocation alive for work registered here.
+        //
+        // Their result is never allowed to change the outcome of the booking either — a dead
+        // SMTP host must not surface as "booking failed" for a slot that is already held.
+        after(async () => {
+            try {
+                await sendAppointmentBookedEmails({
+                    appointmentId: booking.appointment.id,
+                    slotDate,
+                    slotTime,
+                    amount: booking.appointment.amount,
+                    patient: {
+                        name: userData.name,
+                        email: userData.email,
+                        phone: userData.phone,
+                        gender: userData.gender,
+                        dob: userData.dob,
+                    },
+                    doctor: {
+                        name: booking.doctor.name,
+                        email: booking.doctor.email,
+                        speciality: booking.doctor.speciality,
+                        degree: booking.doctor.degree,
+                        experience: booking.doctor.experience,
+                        hospital: booking.doctor.hospital,
+                        city: booking.doctor.city,
+                        phone: booking.doctor.phone,
+                        address: booking.doctor.address as { line1?: string; line2?: string } | null,
+                    },
+                })
+            } catch (error) {
+                console.error(
+                    `[mail] [appointment ${booking.appointment.id}] confirmation emails threw`,
+                    error,
+                )
+            }
         })
 
         revalidatePath('/my-appointments')
