@@ -498,42 +498,9 @@ export async function doctorList() {
 }
 
 // ─── Video consultation ──────────────────────────────────────────────────────
-
-export async function startVideoCall(appointmentId: string) {
-    try {
-        const doctorId = await getSessionId('doctor')
-        if (!doctorId) return fail('Your session has expired. Please sign in again.')
-
-        const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId } })
-        if (!appointment || appointment.docId !== doctorId) return fail('Appointment not found')
-        if (appointment.cancelled) return fail('This appointment was cancelled')
-        if (appointment.meetingId) return { success: true as const, meetingId: appointment.meetingId }
-
-        const meetingId = `medicare-${appointmentId}-${Math.random().toString(36).slice(2, 10)}`
-        await prisma.appointment.update({ where: { id: appointmentId }, data: { meetingId } })
-
-        return { success: true as const, meetingId }
-    } catch (error) {
-        return unexpected('startVideoCall', error)
-    }
-}
-
-export async function getMeetingId(appointmentId: string) {
-    try {
-        // Either side of the consultation may fetch it, but only for their own booking.
-        const doctorId = await getSessionId('doctor')
-        const userId = await getSessionId('user')
-        if (!doctorId && !userId) return fail('Not authorized')
-
-        const appointment = await prisma.appointment.findUnique({
-            where: { id: appointmentId },
-            select: { meetingId: true, docId: true, userId: true },
-        })
-        if (!appointment) return fail('Appointment not found')
-        if (appointment.docId !== doctorId && appointment.userId !== userId) return fail('Not authorized')
-
-        return { success: true as const, meetingId: appointment.meetingId }
-    } catch (error) {
-        return unexpected('getMeetingId', error)
-    }
-}
+//
+// `startVideoCall` and `getMeetingId` used to live here, duplicating what
+// `consultationActions` does. Two places minting `meetingId` meant a room could be opened
+// without a `startTime`, which broke the call timer and the recorded duration. The
+// consultation room is the single owner of that lifecycle now — see
+// `src/app/actions/consultationActions.ts`.

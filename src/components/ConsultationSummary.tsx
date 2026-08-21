@@ -4,18 +4,21 @@ import React from 'react'
 import { useRouter } from 'next/navigation'
 
 interface ConsultationSummaryProps {
+    // Every field is nullable: these come straight from the appointment row, where a
+    // consultation that was cancelled before it started has none of them filled in.
     appointment: {
         id: string
-        startTime?: string
-        endTime?: string
-        duration?: number
-        diagnosis?: string
-        prescription?: string
-        notes?: string
-        followUpDate?: string
-        docData?: any
-        userData?: any
-        docId: string
+        startTime?: string | null
+        endTime?: string | null
+        duration?: number | null
+        diagnosis?: string | null
+        prescription?: string | null
+        notes?: string | null
+        followUpDate?: string | null
+        doctorName?: string | null
+        patientName?: string | null
+        slotDate?: string | null
+        slotTime?: string | null
     }
     role: 'doctor' | 'patient'
 }
@@ -23,13 +26,16 @@ interface ConsultationSummaryProps {
 const ConsultationSummary: React.FC<ConsultationSummaryProps> = ({ appointment, role }) => {
     const router = useRouter()
 
-    const formatDate = (dateString?: string) => {
+    const formatDate = (dateString?: string | null) => {
         if (!dateString) return 'N/A'
-        return new Date(dateString).toLocaleString()
+        const parsed = new Date(dateString)
+        return Number.isNaN(parsed.getTime()) ? 'N/A' : parsed.toLocaleString()
     }
 
-    const formatDuration = (seconds?: number) => {
+    const formatDuration = (seconds?: number | null) => {
         if (!seconds) return '0 mins'
+        // A 90-second call used to render as "1 mins"; anything under a minute as "0 mins".
+        if (seconds < 60) return `${seconds} sec`
         return `${Math.floor(seconds / 60)} mins`
     }
 
@@ -38,7 +44,13 @@ const ConsultationSummary: React.FC<ConsultationSummaryProps> = ({ appointment, 
             <div className={`p-6 ${role === 'doctor' ? 'bg-indigo-50' : 'bg-green-50'} border-b flex justify-between items-center`}>
                 <div>
                     <h2 className="text-2xl font-bold text-gray-800">Consultation Report</h2>
-                    <p className="text-sm text-gray-500 mt-1">ID: {appointment.id}</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                        {role === 'doctor'
+                            ? appointment.patientName || 'Patient'
+                            : appointment.doctorName || 'Doctor'}
+                        {appointment.slotTime ? ` · ${appointment.slotTime}` : ''}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-0.5">ID: {appointment.id}</p>
                 </div>
                 <div className="text-right">
                     <span className={`px-4 py-1 rounded-full text-sm font-semibold ${role === 'doctor' ? 'bg-indigo-200 text-indigo-800' : 'bg-green-200 text-green-800'}`}>
@@ -115,7 +127,7 @@ const ConsultationSummary: React.FC<ConsultationSummaryProps> = ({ appointment, 
                         Print Report
                     </button>
                     <button
-                        onClick={() => router.push(role === 'doctor' ? '/doctor-dashboard' : '/my-appointments')}
+                        onClick={() => router.push(role === 'doctor' ? '/doctor-dashboard/appointments' : '/my-appointments')}
                         className="px-6 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors"
                     >
                         Return to Dashboard

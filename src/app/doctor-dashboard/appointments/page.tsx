@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
-import { appointmentsDoctor, appointmentComplete, appointmentCancelDoctor, startVideoCall } from '@/app/actions/doctorActions'
+import { appointmentsDoctor, appointmentComplete, appointmentCancelDoctor } from '@/app/actions/doctorActions'
 import { toast } from 'react-toastify'
 import { useRouter } from 'next/navigation'
 import { Video, Check, X, CreditCard, Banknote } from 'lucide-react'
@@ -44,13 +44,13 @@ const Appointments = () => {
         }
     }
 
-    const handleVideoCall = async (id: string) => {
-        const res = await startVideoCall(id)
-        if (res.success) {
-            router.push(`/video-call/${id}`)
-        } else {
-            toast.error(res.message)
-        }
+    // Opening the room is all this does. Minting the meeting id here (the old
+    // `startVideoCall` call) was a second, competing way to start a consultation: it wrote
+    // `meetingId` without `startTime`, so the call timer sat at 00:00 and every finished
+    // consultation was recorded with a duration of zero. The room's own "Start Video
+    // Consultation" button now owns that, and sets both.
+    const handleVideoCall = (id: string) => {
+        router.push(`/video-call/${id}`)
     }
 
     useEffect(() => {
@@ -96,7 +96,7 @@ const Appointments = () => {
                                     return (
                                         <div className='flex gap-2'>
                                             <button onClick={() => handleVideoCall(item.id)} className='text-xs bg-primary text-white px-3 py-2 rounded-lg font-semibold flex items-center gap-1.5 hover:bg-primary/90 hover:-translate-y-0.5 transition-all shadow-sm'>
-                                                <Video className='w-3.5 h-3.5' /> Call
+                                                <Video className='w-3.5 h-3.5' /> {item.meetingId ? 'Join' : 'Start'}
                                             </button>
                                             <button onClick={() => cancelAppointment(item.id)} className='w-9 h-9 flex items-center justify-center rounded-lg bg-red-50 text-red-500 hover:bg-red-100 transition-colors' aria-label='Cancel'>
                                                 <X className='w-4 h-4' />

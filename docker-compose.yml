@@ -18,6 +18,16 @@ services:
       SERPAPI_KEY: ${SERPAPI_KEY:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@medicare.com}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in your .env file}
+      # Base URL for the "Join video call" links in appointment emails.
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      # Appointment confirmation emails. All optional: with no SMTP host the booking still
+      # succeeds and the skipped mail is logged instead.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-}
     depends_on:
       postgres:
         condition: service_healthy
