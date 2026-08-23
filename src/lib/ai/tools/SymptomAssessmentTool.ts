@@ -1,5 +1,6 @@
 import { AITool, ToolResult } from '../ToolRegistry';
 import { SeverityClassifier } from '../classifiers/SeverityClassifier';
+import prisma from '@/lib/prisma';
 
 interface SymptomMetadata {
     raw: string;
@@ -49,14 +50,58 @@ export class SymptomAssessmentTool implements AITool {
                 matchedSeverityPatterns: classification.matchedPatterns.length > 0 ? classification.matchedPatterns : undefined,
                 needsClarification: needsClarification ? true : undefined,
                 clarificationQuestions: needsClarification ? clarificationQuestions : undefined,
-                patientContext: {
-                    allergies: [],
-                    prescriptions: [],
-                    chronicConditions: [],
-                    medicalHistory: []
-                }
+                patientContext: await this.buildPatientContext(userId)
             }
         };
+    }
+
+    /**
+     * Real allergy, medication and diagnosis history for this patient — assessing
+     * symptoms with this permanently empty (the previous behaviour) meant every patient's
+     * guidance was generated as if they had no allergies, took no medications and had no
+     * history at all, regardless of what was actually on file.
+     */
+    private async buildPatientContext(userId: string) {
+        try {
+            const [user, prescriptions, recentDiagnoses] = await Promise.all([
+                prisma.user.findUnique({ where: { id: userId }, select: { allergies: true } }),
+                prisma.prescription.findMany({
+                    where: { userId },
+                    orderBy: { createdAt: 'desc' },
+                    take: 5,
+                    select: { medicines: true },
+                }),
+                prisma.appointment.findMany({
+                    where: { userId, isCompleted: true, NOT: { diagnosis: null } },
+                    orderBy: { updatedAt: 'desc' },
+                    take: 3,
+                    select: { diagnosis: true },
+                }),
+            ]);
+
+            const context: Record<string, unknown> = {};
+
+            // Allergies are free text with no "unset" default, so a blank value is
+            // genuinely ambiguous between "never answered" and "has none" — the field is
+            // simply omitted rather than asserted either way. See src/lib/profile.ts.
+            if (user?.allergies?.trim()) context.allergies = user.allergies.trim();
+
+            const medicationNames = prescriptions
+                .flatMap((p) => (Array.isArray(p.medicines) ? p.medicines : []))
+                .map((m) => (m && typeof m === 'object' && 'name' in m ? String((m as { name: unknown }).name) : String(m)))
+                .filter(Boolean);
+            if (medicationNames.length > 0) context.currentMedications = Array.from(new Set(medicationNames));
+
+            const diagnoses = recentDiagnoses.map((a) => a.diagnosis).filter((d): d is string => Boolean(d));
+            if (diagnoses.length > 0) context.recentDiagnoses = diagnoses;
+
+            return context;
+        } catch (error) {
+            console.error('[SymptomAssessmentTool] Failed to load patient context:', error);
+            // A lookup failure must not block the symptom assessment itself — it proceeds
+            // with an empty context, same as a patient with no history on file.
+            return {};
+        }
     }
 
     private extractSymptoms(input: string): SymptomMetadata[] {

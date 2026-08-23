@@ -28,9 +28,31 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-}
+      # Socket.IO fans WebRTC signalling across instances through Redis. Points at the
+      # bundled service below, so scaling `app` to more than one replica keeps working.
+      REDIS_URL: redis://redis:6379
+      # Optional TURN relay for WebRTC. Without one, calls fail on networks that cannot
+      # establish a direct peer-to-peer path (symmetric NAT, some corporate firewalls).
+      TURN_URLS: ${TURN_URLS:-}
+      TURN_USERNAME: ${TURN_USERNAME:-}
+      TURN_CREDENTIAL: ${TURN_CREDENTIAL:-}
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # Signalling messages are transient and worthless after the call connects, so there is
+    # nothing here worth persisting to disk.
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
 
   postgres:

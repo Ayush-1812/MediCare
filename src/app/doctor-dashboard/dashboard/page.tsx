@@ -1,15 +1,21 @@
 'use client'
 
 import React, { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { doctorDashboard, appointmentComplete, appointmentCancelDoctor } from '@/app/actions/doctorActions'
 import { toast } from 'react-toastify'
-import { IndianRupee, CalendarCheck, Users, ListChecks, Check, X, Clock } from 'lucide-react'
+import { IndianRupee, CalendarCheck, Users, ListChecks, Check, X, Clock, Video } from 'lucide-react'
 import { formatINR } from '@/lib/currency'
 import { avatarFor } from '@/lib/avatar'
 import { appointmentStatus, formatSlotDate, STATUS_STYLES } from '@/lib/appointment'
 
 const Dashboard = () => {
     const [dashData, setDashData] = useState<any>(null)
+    const router = useRouter()
+
+    const handleVideoCall = (id: string) => {
+        router.push(`/video-call/${id}`)
+    }
 
     const getDashData = async () => {
         const res = await doctorDashboard()
@@ -102,6 +108,9 @@ const Dashboard = () => {
                                 if (status === 'Scheduled') {
                                     return (
                                         <div className='flex gap-2'>
+                                            <button onClick={() => handleVideoCall(item.id)} className='w-9 h-9 flex items-center justify-center rounded-full bg-primary text-white hover:bg-primary/90 transition-colors' aria-label={item.meetingId ? 'Join video call' : 'Start video call'}>
+                                                <Video className='w-4 h-4' />
+                                            </button>
                                             <button onClick={() => cancelAppointment(item.id)} className='w-9 h-9 flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100 transition-colors' aria-label='Cancel'>
                                                 <X className='w-4 h-4' />
                                             </button>

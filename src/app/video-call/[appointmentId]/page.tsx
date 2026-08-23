@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
     getConsultationDetails,
@@ -9,8 +9,9 @@ import {
 } from '@/app/actions/consultationActions'
 import ConsultationPanel from '@/components/ConsultationPanel'
 import ConsultationSummary from '@/components/ConsultationSummary'
-import { formatSlotDateTime } from '@/lib/appointment'
-import { ArrowLeft, ExternalLink, RefreshCw, Video, VideoOff } from 'lucide-react'
+import VideoCallStage from '@/components/VideoCallStage'
+import { consultationJoinState, formatSlotDateTime } from '@/lib/appointment'
+import { ArrowLeft, RefreshCw, Video, VideoOff } from 'lucide-react'
 import { toast } from 'react-toastify'
 
 type ConsultationStatus = 'loading' | 'denied' | 'waiting' | 'active' | 'ended'
@@ -34,60 +35,6 @@ type Consultation = {
     followUpDate: string | null
 }
 
-const JITSI_DOMAIN = process.env.NEXT_PUBLIC_JITSI_DOMAIN || 'meet.jit.si'
-
-/**
- * The slice of Jitsi's `external_api.js` this page actually uses. The library ships no
- * types, so this stands in for them rather than letting `any` leak through the file.
- */
-type JitsiApi = {
-    addEventListener: (event: string, handler: () => void) => void
-    dispose: () => void
-}
-
-type JitsiApiConstructor = new (domain: string, options: Record<string, unknown>) => JitsiApi
-
-/** The constructor the script attaches to `window`, absent until the script has loaded. */
-function jitsiGlobal(): JitsiApiConstructor | undefined {
-    return (window as unknown as { JitsiMeetExternalAPI?: JitsiApiConstructor }).JitsiMeetExternalAPI
-}
-
-/**
- * Loads Jitsi's `external_api.js` once per page load.
- *
- * The old code appended a fresh <script> on every join and removed it again in cleanup,
- * which both re-downloaded the library and could throw `NotFoundError` when React ran the
- * cleanup twice. Caching the promise keeps a single tag in the document.
- */
-let jitsiScript: Promise<JitsiApiConstructor> | null = null
-
-function loadJitsi(domain: string): Promise<JitsiApiConstructor> {
-    if (typeof window === 'undefined') return Promise.reject(new Error('Not in a browser'))
-
-    const existing = jitsiGlobal()
-    if (existing) return Promise.resolve(existing)
-    if (jitsiScript) return jitsiScript
-
-    jitsiScript = new Promise((resolve, reject) => {
-        const script = document.createElement('script')
-        script.src = `https://${domain}/external_api.js`
-        script.async = true
-        script.onload = () => {
-            const api = jitsiGlobal()
-            if (api) resolve(api)
-            else reject(new Error('The video library loaded but did not initialise.'))
-        }
-        script.onerror = () => {
-            // Let the next attempt retry instead of caching the rejection forever.
-            jitsiScript = null
-            reject(new Error(`Could not reach ${domain}. Check your connection or any blocker.`))
-        }
-        document.body.appendChild(script)
-    })
-
-    return jitsiScript
-}
-
 const VideoCall = () => {
     const params = useParams()
     const appointmentId = Array.isArray(params.appointmentId)
@@ -95,19 +42,13 @@ const VideoCall = () => {
         : (params.appointmentId as string)
     const router = useRouter()
 
-    const jitsiContainerRef = useRef<HTMLDivElement>(null)
-    const apiRef = useRef<JitsiApi | null>(null)
-
     const [consultation, setConsultation] = useState<Consultation | null>(null)
     const [role, setRole] = useState<ConsultationRole | null>(null)
     const [status, setStatus] = useState<ConsultationStatus>('loading')
     const [error, setError] = useState<string | null>(null)
-    const [embedError, setEmbedError] = useState<string | null>(null)
-    const [hasLeft, setHasLeft] = useState(false)
     const [starting, setStarting] = useState(false)
 
     const isDoctor = role === 'doctor'
-    const meetingId = consultation?.meetingId ?? null
 
     const fetchDetails = useCallback(async () => {
         const res = await getConsultationDetails(appointmentId)
@@ -134,7 +75,7 @@ const VideoCall = () => {
         fetchDetails()
     }, [appointmentId, fetchDetails])
 
-    // Poll only while the patient is waiting to be let in. Polling through an active call
+    // Poll only while the patient is waiting to be let in. Polling through a live call
     // re-rendered the page every 5s for no benefit.
     useEffect(() => {
         if (status !== 'waiting') return
@@ -157,76 +98,9 @@ const VideoCall = () => {
         }
     }
 
-    // ─── Jitsi lifecycle ─────────────────────────────────────────────────────
-    useEffect(() => {
-        if (status !== 'active' || !meetingId || hasLeft) return
-
-        const container = jitsiContainerRef.current
-        if (!container) return
-
-        let cancelled = false
-        setEmbedError(null)
-
-        loadJitsi(JITSI_DOMAIN)
-            .then((JitsiMeetExternalAPI) => {
-                if (cancelled) return
-
-                const api = new JitsiMeetExternalAPI(JITSI_DOMAIN, {
-                    roomName: meetingId,
-                    width: '100%',
-                    height: '100%',
-                    parentNode: container,
-                    userInfo: { displayName: consultation?.displayName ?? '' },
-                    configOverwrite: {
-                        startWithAudioMuted: true,
-                        disableThirdPartyRequests: true,
-                        prejoinPageEnabled: false,
-                    },
-                    interfaceConfigOverwrite: {
-                        TOOLBAR_BUTTONS: [
-                            'microphone',
-                            'camera',
-                            'desktop',
-                            'fullscreen',
-                            'hangup',
-                            'chat',
-                            'tileview',
-                            'settings',
-                        ],
-                    },
-                })
-
-                apiRef.current = api
-
-                const onLeave = () => setHasLeft(true)
-                api.addEventListener('videoConferenceLeft', onLeave)
-                api.addEventListener('readyToClose', onLeave)
-            })
-            .catch((err: Error) => {
-                if (!cancelled) setEmbedError(err.message)
-            })
-
-        return () => {
-            cancelled = true
-            // `dispose()` was previously read off a state variable that was still null when
-            // the cleanup closure was created, so the conference was never torn down and the
-            // camera stayed on after leaving the page. A ref always holds the live instance.
-            if (apiRef.current) {
-                apiRef.current.dispose()
-                apiRef.current = null
-            }
-        }
-    }, [status, meetingId, hasLeft, consultation?.displayName])
-
-    const leaveRoom = () => {
-        if (apiRef.current) {
-            apiRef.current.dispose()
-            apiRef.current = null
-        }
-        router.push(isDoctor ? '/doctor-dashboard/appointments' : '/my-appointments')
-    }
-
     const backHref = isDoctor ? '/doctor-dashboard/appointments' : '/my-appointments'
+    const leaveRoom = () => router.push(backHref)
+
     const slotLabel = consultation
         ? formatSlotDateTime(consultation.slotDate, consultation.slotTime)
         : ''
@@ -235,6 +109,13 @@ const VideoCall = () => {
             ? consultation.patientName || 'Patient'
             : consultation.doctorName || 'Doctor'
         : ''
+
+    // The appointments list disables the join button until 15 minutes before the slot, but
+    // that only stops a click — a bookmarked or shared link still reaches this page
+    // directly. Without this, a patient arriving early saw "Waiting for the doctor", which
+    // reads as "the doctor is late" rather than "you're early".
+    const joinState = consultation && !isDoctor ? consultationJoinState(consultation) : null
+    const tooEarly = joinState !== null && !joinState.canJoin && !joinState.closed
 
     // ─── Loading ─────────────────────────────────────────────────────────────
     if (status === 'loading') {
@@ -295,10 +176,14 @@ const VideoCall = () => {
                     </div>
 
                     <h1 className="text-2xl font-bold text-gray-900 mb-1">
-                        {isDoctor ? 'Ready to start?' : 'Waiting for the doctor'}
+                        {isDoctor ? 'Ready to start?' : tooEarly ? 'Not open yet' : 'Waiting for the doctor'}
                     </h1>
                     <p className="text-gray-600 mb-1">
-                        {isDoctor ? `Consultation with ${otherParty}` : `${otherParty} will admit you shortly`}
+                        {isDoctor
+                            ? `Consultation with ${otherParty}`
+                            : tooEarly
+                              ? joinState?.reason
+                              : `${otherParty} will admit you shortly`}
                     </p>
                     {slotLabel && <p className="text-sm text-gray-400 mb-6">{slotLabel}</p>}
 
@@ -340,67 +225,13 @@ const VideoCall = () => {
     return (
         <div className="h-screen w-full bg-black flex flex-col lg:flex-row overflow-hidden">
             <div className="flex-1 relative min-h-0">
-                <div ref={jitsiContainerRef} className="h-full w-full" />
-
-                {embedError && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-gray-900 p-6">
-                        <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center">
-                            <VideoOff className="w-10 h-10 text-red-400 mx-auto mb-3" />
-                            <h2 className="text-lg font-bold text-gray-900 mb-2">Could not load the call</h2>
-                            <p className="text-sm text-gray-600 mb-5">{embedError}</p>
-                            <a
-                                href={`https://${JITSI_DOMAIN}/${meetingId}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="w-full inline-flex items-center justify-center gap-2 bg-primary text-white px-6 py-3 rounded-xl font-medium hover:bg-primary/90 transition"
-                            >
-                                <ExternalLink className="w-4 h-4" /> Open the call in a new tab
-                            </a>
-                            <button
-                                onClick={() => {
-                                    setEmbedError(null)
-                                    setHasLeft(false)
-                                }}
-                                className="w-full mt-2 px-6 py-3 rounded-xl font-medium text-gray-600 hover:bg-gray-50 transition"
-                            >
-                                Try again
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {hasLeft && !embedError && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-gray-900 p-6">
-                        <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center">
-                            <h2 className="text-lg font-bold text-gray-900 mb-2">You left the consultation</h2>
-                            <p className="text-sm text-gray-600 mb-5">
-                                {isDoctor
-                                    ? 'Rejoin the room, or complete the write-up on the right to finish this consultation.'
-                                    : 'You can rejoin while the consultation is still running.'}
-                            </p>
-                            <button
-                                onClick={() => setHasLeft(false)}
-                                className="w-full bg-primary text-white px-6 py-3 rounded-xl font-medium hover:bg-primary/90 transition"
-                            >
-                                Rejoin call
-                            </button>
-                            <button
-                                onClick={leaveRoom}
-                                className="w-full mt-2 px-6 py-3 rounded-xl font-medium text-gray-600 hover:bg-gray-50 transition"
-                            >
-                                Back to appointments
-                            </button>
-                        </div>
-                    </div>
-                )}
-
-                {!hasLeft && !embedError && (
-                    <button
-                        onClick={leaveRoom}
-                        className="absolute top-4 left-4 z-10 flex items-center gap-2 bg-black/50 hover:bg-black/70 text-white text-sm font-medium px-3 py-2 rounded-lg backdrop-blur transition"
-                    >
-                        <ArrowLeft className="w-4 h-4" /> Leave
-                    </button>
+                {role && (
+                    <VideoCallStage
+                        appointmentId={appointmentId}
+                        role={role}
+                        peerName={otherParty}
+                        onLeave={leaveRoom}
+                    />
                 )}
             </div>
 

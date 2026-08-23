@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import prisma from '@/lib/prisma';
 import { MessageRole } from '@prisma/client';
 import { AIOrchestrator } from '@/lib/ai/AIOrchestrator';
+import { GEMINI_MODEL } from '@/lib/ai/config/geminiConfig';
 
 export async function POST(req: NextRequest) {
     try {
@@ -60,7 +61,22 @@ export async function POST(req: NextRequest) {
             console.log(`[API /chat] Created new conversation: ${currentConversationId}`);
         }
 
-        // 4. Save User Message
+        // 4. Load recent history BEFORE saving this turn, so it naturally excludes the
+        // message being answered right now. Without this, every reply was generated with
+        // no memory of the conversation — a patient asking "what about the second one?"
+        // right after a prescription list had nothing for "the second one" to refer to.
+        const priorMessages = await prisma.message.findMany({
+            where: { conversationId: currentConversationId },
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+            select: { role: true, content: true },
+        });
+        const history = priorMessages.reverse().map((m) => ({
+            role: m.role === MessageRole.USER ? 'user' as const : 'assistant' as const,
+            content: m.content,
+        }));
+
+        // 5. Save User Message
         await prisma.message.create({
             data: {
                 conversationId: currentConversationId,
@@ -68,7 +84,7 @@ export async function POST(req: NextRequest) {
                 content: message,
             }
         });
-        
+
         console.log(`[API /chat] Stored user message in conversation ${currentConversationId}`);
 
         // Update lastMessageAt
@@ -77,23 +93,23 @@ export async function POST(req: NextRequest) {
             data: { lastMessageAt: new Date() }
         });
 
-        // 5. Generate Placeholder Response & Save AI Message
-        // Invoke the AI Orchestrator instead of using a static string
+        // 6. Generate the assistant's reply via the AI Orchestrator (real Gemini + real
+        // patient data — the pipeline stopped being a mock once the tools were wired up).
         const orchestrator = new AIOrchestrator();
-        const orchestratorResponse = await orchestrator.handleRequest(userId, message);
+        const orchestratorResponse = await orchestrator.handleRequest(userId, message, history);
 
         await prisma.message.create({
             data: {
                 conversationId: currentConversationId,
                 role: MessageRole.ASSISTANT,
                 content: orchestratorResponse,
-                model: 'ai-orchestrator-mock'
+                model: GEMINI_MODEL
             }
         });
         
         console.log(`[API /chat] Stored assistant orchestrated message in conversation ${currentConversationId}`);
 
-        // 6. Return Streaming Response
+        // 7. Return Streaming Response
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
             async start(controller) {

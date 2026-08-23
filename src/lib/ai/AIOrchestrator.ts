@@ -4,15 +4,16 @@ import { ResponseFormatter } from './ResponseFormatter';
 import { ContextBuilder } from './contextBuilder/ContextBuilder';
 import { PromptManager } from './promptManager/PromptManager';
 import { GeminiService } from './services/geminiService';
-import { 
-    AppointmentTool, 
-    PrescriptionTool, 
-    ReportTool, 
-    TimelineTool, 
-    ProfileTool, 
-    HealthSummaryTool 
-} from './tools/MockTools';
+import {
+    AppointmentTool,
+    PrescriptionTool,
+    ReportTool,
+    TimelineTool,
+    ProfileTool,
+    HealthSummaryTool
+} from './tools/PatientDataTools';
 import { SymptomAssessmentTool } from './tools/SymptomAssessmentTool';
+import type { ConversationTurn } from './promptManager/types';
 
 export class AIOrchestrator {
     private geminiService: GeminiService;
@@ -36,7 +37,11 @@ export class AIOrchestrator {
         this.geminiService = GeminiService.getInstance();
     }
 
-    public async handleRequest(userId: string, message: string): Promise<string> {
+    public async handleRequest(
+        userId: string,
+        message: string,
+        history: ConversationTurn[] = []
+    ): Promise<string> {
         try {
             // 1. Invoke Intent Router
             const intentMatch = IntentRouter.route(message);
@@ -61,7 +66,7 @@ export class AIOrchestrator {
             const context = contextBuilder.build(toolResults, intentMatch.intents);
 
             // 4. Build Prompt Package
-            const promptPackage = PromptManager.buildPrompt(message, intentMatch.intents, context);
+            const promptPackage = PromptManager.buildPrompt(message, intentMatch.intents, context, history);
 
             // 5. Generate LLM Response via Gemini Service
             const llmResponse = await this.geminiService.generateResponse(promptPackage);
