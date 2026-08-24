@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import {
     getConsultationDetails,
@@ -9,6 +9,7 @@ import {
 } from '@/app/actions/consultationActions'
 import ConsultationPanel from '@/components/ConsultationPanel'
 import ConsultationSummary from '@/components/ConsultationSummary'
+import PatientNotesPanel from '@/components/PatientNotesPanel'
 import VideoCallStage from '@/components/VideoCallStage'
 import { consultationJoinState, formatSlotDateTime } from '@/lib/appointment'
 import { ArrowLeft, RefreshCw, Video, VideoOff } from 'lucide-react'
@@ -32,6 +33,7 @@ type Consultation = {
     diagnosis: string | null
     prescription: string | null
     notes: string | null
+    patientNotes: string | null
     followUpDate: string | null
 }
 
@@ -75,13 +77,24 @@ const VideoCall = () => {
         fetchDetails()
     }, [appointmentId, fetchDetails])
 
-    // Poll only while the patient is waiting to be let in. Polling through a live call
-    // re-rendered the page every 5s for no benefit.
+    // Poll while waiting to be let in, and — for the patient — while the call is live too.
+    //
+    // Polling used to stop the moment the call started, which meant that when the doctor
+    // submitted their report and completed the appointment, the patient's page never found
+    // out: they sat in a dead room with a frozen video and no way forward. The socket
+    // 'consultation-ended' broadcast below handles the common case instantly; this slower
+    // poll is the safety net for when that signal is missed (socket dropped, patient
+    // reconnecting, a tab restored from sleep).
+    //
+    // The doctor is deliberately excluded: their own page already refreshes when they end
+    // the consultation, and polling underneath the form they are typing into is wasteful.
     useEffect(() => {
-        if (status !== 'waiting') return
-        const interval = setInterval(fetchDetails, 5000)
+        const shouldPoll = status === 'waiting' || (status === 'active' && role === 'patient')
+        if (!shouldPoll) return
+
+        const interval = setInterval(fetchDetails, status === 'waiting' ? 5000 : 10000)
         return () => clearInterval(interval)
-    }, [status, fetchDetails])
+    }, [status, role, fetchDetails])
 
     const handleStartConsultation = async () => {
         setStarting(true)
@@ -100,6 +113,25 @@ const VideoCall = () => {
 
     const backHref = isDoctor ? '/doctor-dashboard/appointments' : '/my-appointments'
     const leaveRoom = () => router.push(backHref)
+
+    // Set by VideoCallStage once its socket is up, so the doctor's panel can tell the
+    // patient the consultation is over the instant the report is submitted.
+    const announceEndedRef = useRef<(() => void) | null>(null)
+    const handleStageReady = useCallback((api: { announceConsultationEnded: () => void }) => {
+        announceEndedRef.current = api.announceConsultationEnded
+    }, [])
+
+    /** The doctor finished and saved the report. */
+    const handleConsultationEnded = useCallback(async () => {
+        announceEndedRef.current?.()
+        await fetchDetails()
+    }, [fetchDetails])
+
+    /** The other side ended it — move this side to the report. */
+    const handleRemoteEnded = useCallback(() => {
+        toast.info('The doctor has ended the consultation')
+        fetchDetails()
+    }, [fetchDetails])
 
     const slotLabel = consultation
         ? formatSlotDateTime(consultation.slotDate, consultation.slotTime)
@@ -223,27 +255,39 @@ const VideoCall = () => {
 
     // ─── Live consultation ───────────────────────────────────────────────────
     return (
-        <div className="h-screen w-full bg-black flex flex-col lg:flex-row overflow-hidden">
+        <div className="h-screen w-full bg-[#202124] flex flex-col lg:flex-row overflow-hidden">
             <div className="flex-1 relative min-h-0">
                 {role && (
                     <VideoCallStage
                         appointmentId={appointmentId}
                         role={role}
                         peerName={otherParty}
+                        selfName={consultation?.displayName}
                         onLeave={leaveRoom}
+                        onConsultationEnded={handleRemoteEnded}
+                        onReady={handleStageReady}
                     />
                 )}
             </div>
 
-            {isDoctor && (
-                <div className="w-full lg:w-[400px] h-1/2 lg:h-full bg-white shrink-0">
+            {/* Both sides get a side panel: the doctor writes the clinical report, the
+                patient keeps their own notes. Previously only the doctor had one, so the
+                patient had nowhere to write anything down mid-consultation. */}
+            <div className="w-full lg:w-[400px] h-1/2 lg:h-full bg-white shrink-0">
+                {isDoctor ? (
                     <ConsultationPanel
                         appointmentId={appointmentId}
                         startTime={consultation?.startTime ?? undefined}
-                        onEndCall={fetchDetails}
+                        onEndCall={handleConsultationEnded}
                     />
-                </div>
-            )}
+                ) : (
+                    <PatientNotesPanel
+                        appointmentId={appointmentId}
+                        initialNotes={consultation?.patientNotes}
+                        doctorName={consultation?.doctorName ?? undefined}
+                    />
+                )}
+            </div>
         </div>
     )
 }

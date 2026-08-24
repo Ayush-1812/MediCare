@@ -38,9 +38,14 @@ type Options = {
     role: 'doctor' | 'patient'
     /** Hold off until the consultation room is actually open. */
     enabled: boolean
+    /**
+     * The other side closed the consultation for good (the doctor submitted the report).
+     * Distinct from the peer merely leaving — this room is finished.
+     */
+    onConsultationEnded?: () => void
 }
 
-export function useWebRTCCall({ appointmentId, role, enabled }: Options) {
+export function useWebRTCCall({ appointmentId, role, enabled, onConsultationEnded }: Options) {
     const [status, setStatus] = useState<CallStatus>('idle')
     const [error, setError] = useState<CallError | null>(null)
     const [peerPresent, setPeerPresent] = useState(false)
@@ -64,6 +69,13 @@ export function useWebRTCCall({ appointmentId, role, enabled }: Options) {
     // call `.stop()` on the capture itself — it kept running invisibly, and the browser's
     // "you are sharing your screen" indicator stayed on until the tab was closed.
     const screenTrackRef = useRef<MediaStreamTrack | null>(null)
+
+    // Held in a ref, not read directly in the effect: a parent that re-creates this
+    // callback each render would otherwise change the effect's dependencies and tear the
+    // whole call down mid-consultation — the same failure `hasTurnRef` below exists to
+    // avoid. The ref is refreshed on every render so it never goes stale.
+    const onConsultationEndedRef = useRef(onConsultationEnded)
+    onConsultationEndedRef.current = onConsultationEnded
 
     // Mirrors `hasTurn` for use inside callbacks. Reading the state value there instead
     // made `createPeerConnection` — and through it the whole setup effect — depend on a
@@ -377,6 +389,15 @@ export function useWebRTCCall({ appointmentId, role, enabled }: Options) {
                 setStatus('waiting-for-peer')
             })
 
+            // The doctor closed the consultation. Tear the media down immediately rather
+            // than leaving a frozen last frame on screen, then let the page move this side
+            // to the report.
+            socket.on('consultation-ended', () => {
+                setPeerPresent(false)
+                closePeer()
+                onConsultationEndedRef.current?.()
+            })
+
             socket.on('signal', handleSignal)
         }
 
@@ -461,6 +482,14 @@ export function useWebRTCCall({ appointmentId, role, enabled }: Options) {
         }
     }, [sharingScreen])
 
+    /**
+     * Tells the other side the consultation is over. Called by the doctor once the report
+     * is saved, so the patient leaves the room immediately instead of waiting for a poll.
+     */
+    const announceConsultationEnded = useCallback(() => {
+        socketRef.current?.emit('consultation-ended')
+    }, [])
+
     return {
         status,
         error,
@@ -469,6 +498,7 @@ export function useWebRTCCall({ appointmentId, role, enabled }: Options) {
         micOn,
         camOn,
         sharingScreen,
+        announceConsultationEnded,
         toggleMic,
         toggleCam,
         toggleScreenShare,

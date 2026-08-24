@@ -173,6 +173,16 @@ app.prepare().then(async () => {
             socket.to(room).emit('signal', payload)
         })
 
+        // The doctor has submitted the write-up and closed the consultation. This is not
+        // the same as 'leave' (which just means one side stepped out and could come back):
+        // the appointment is now completed, so the other side must be moved to the report
+        // rather than left sitting in a room that no longer exists. Relayed in real time
+        // because the alternative — waiting for the patient's next poll — leaves them
+        // staring at a frozen call for several seconds.
+        socket.on('consultation-ended', () => {
+            socket.to(room).emit('consultation-ended', { role })
+        })
+
         socket.on('leave', () => {
             socket.to(room).emit('peer-left', { role })
             socket.leave(room)
