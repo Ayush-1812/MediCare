@@ -319,7 +319,12 @@ export async function bookAppointment(docId: string, slotDate: string, slotTime:
         revalidatePath('/my-appointments')
         revalidatePath('/doctor-dashboard/appointments')
         revalidatePath('/doctor-dashboard/dashboard')
-        return { success: true as const, message: 'Appointment Booked' }
+        return {
+            success: true as const,
+            message: 'Appointment Booked',
+            appointmentId: booking.appointment.id,
+            amount: booking.appointment.amount,
+        }
     } catch (error) {
         if (error instanceof Error && error.message === 'SLOT_TAKEN') {
             return fail('That slot has just been taken. Please choose another time.')

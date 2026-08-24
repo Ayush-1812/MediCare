@@ -3,6 +3,8 @@
 import React, { useContext, useEffect, useState } from 'react'
 import { AppContext } from '@/context/AppContext'
 import { cancelAppointment, listAppointments } from '@/app/actions/userActions'
+import { createPaymentOrder, verifyPayment } from '@/app/actions/paymentActions'
+import { openRazorpayCheckout } from '@/lib/payment/razorpayCheckout'
 import { toast } from 'react-toastify'
 import { useRouter } from 'next/navigation'
 import { CalendarDays, MapPin, Video, XCircle, CheckCircle2, CreditCard, AlertTriangle, Clock } from 'lucide-react'
@@ -10,12 +12,15 @@ import { avatarFor } from '@/lib/avatar'
 import { appointmentStatus, consultationJoinState, formatSlotDate } from '@/lib/appointment'
 
 const MyAppointments = () => {
-    const { token } = useContext(AppContext)
+    const { token, userData } = useContext(AppContext)
     const [appointments, setAppointments] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     // Whether the room is open depends on the clock, not just on the data. Ticking once a
     // minute lets "Join Video Call" light up on its own instead of needing a page reload.
     const [now, setNow] = useState(() => new Date())
+    // Which appointment's "Pay Now" button is mid-checkout, so only that one shows a
+    // loading state instead of disabling every button on the page.
+    const [payingId, setPayingId] = useState<string | null>(null)
     const router = useRouter()
 
     const getAppointments = async () => {
@@ -45,6 +50,44 @@ const MyAppointments = () => {
             }
         } catch (error: any) {
             toast.error(error.message)
+        }
+    }
+
+    /** Lets a patient who chose "Pay at Clinic" (or dismissed the checkout at booking
+     * time) pay online later, from an appointment already sitting here unpaid. */
+    const handlePayNow = async (appointmentId: string) => {
+        setPayingId(appointmentId)
+        try {
+            const order = await createPaymentOrder(appointmentId)
+            if (!order.success) {
+                toast.error(order.message)
+                return
+            }
+
+            await openRazorpayCheckout({
+                keyId: order.keyId,
+                orderId: order.orderId,
+                amount: order.amount,
+                currency: order.currency,
+                patientName: userData?.name,
+                patientEmail: userData?.email,
+                patientPhone: userData?.phone,
+                onSuccess: async (response) => {
+                    const result = await verifyPayment(
+                        appointmentId,
+                        response.razorpay_order_id,
+                        response.razorpay_payment_id,
+                        response.razorpay_signature,
+                    )
+                    if (result.success) toast.success('Payment successful')
+                    else toast.error(result.message)
+                    getAppointments()
+                },
+            })
+        } catch {
+            toast.error('Could not open the payment window. Please try again.')
+        } finally {
+            setPayingId(null)
         }
     }
 
@@ -122,10 +165,22 @@ const MyAppointments = () => {
 
                                         return (
                                             <>
-                                                {item.payment && (
+                                                {item.payment ? (
                                                     <span className='flex items-center justify-center gap-1.5 py-2.5 border border-emerald-200 bg-emerald-50 rounded-xl text-emerald-600 text-sm font-semibold'>
                                                         <CreditCard className='w-4 h-4' /> Paid
                                                     </span>
+                                                ) : item.amount > 0 && (
+                                                    // Covers both "chose Pay at Clinic" and "closed the Razorpay
+                                                    // popup before finishing" — either way, payment was never
+                                                    // blocking the booking itself, so this is the way back to it.
+                                                    <button
+                                                        onClick={() => handlePayNow(item.id)}
+                                                        disabled={payingId === item.id}
+                                                        className='flex items-center justify-center gap-1.5 py-2.5 border border-blue-200 bg-blue-50 rounded-xl text-primary text-sm font-semibold hover:bg-blue-100 transition-colors disabled:opacity-60 disabled:cursor-not-allowed'
+                                                    >
+                                                        <CreditCard className='w-4 h-4' />
+                                                        {payingId === item.id ? 'Opening...' : 'Pay Now'}
+                                                    </button>
                                                 )}
                                                 <button
                                                     onClick={() => router.push(`/video-call/${item.id}`)}

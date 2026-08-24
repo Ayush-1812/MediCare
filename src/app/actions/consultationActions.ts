@@ -45,6 +45,7 @@ function findAppointment(appointmentId: string) {
             diagnosis: true,
             prescription: true,
             notes: true,
+            patientNotes: true,
             followUpDate: true,
         },
     })
@@ -152,6 +153,39 @@ export async function endConsultation(
     }
 }
 
+/**
+ * Saves the patient's own notes for a consultation.
+ *
+ * Deliberately writes `patientNotes` and nothing else: the doctor's clinical fields
+ * (`diagnosis`, `prescription`, `notes`) are theirs to write, and a patient-facing
+ * action must never be able to touch them. Allowed after the consultation has ended too,
+ * so a patient can still write up what they remember once the call is over.
+ */
+export async function savePatientNotes(appointmentId: string, patientNotes: string) {
+    try {
+        const auth = await authorize(appointmentId)
+        if (!auth.ok) return fail(auth.message)
+        if (auth.role !== 'patient') return fail('Only the patient can save their own notes.')
+
+        if (patientNotes.length > 5000) {
+            return fail('Notes are too long. Please keep them under 5000 characters.')
+        }
+
+        await prisma.appointment.update({
+            where: { id: appointmentId },
+            // Empty input clears the field rather than storing a blank string, so
+            // "has the patient written anything?" stays a simple null check.
+            data: { patientNotes: patientNotes.trim() || null },
+        })
+
+        revalidatePath(`/video-call/${appointmentId}`)
+        revalidatePath('/my-appointments')
+        return { success: true as const, message: 'Notes saved' }
+    } catch (error) {
+        return unexpected('savePatientNotes', error)
+    }
+}
+
 export async function getConsultationDetails(appointmentId: string) {
     try {
         const auth = await authorize(appointmentId)
@@ -183,6 +217,9 @@ export async function getConsultationDetails(appointmentId: string) {
                 // `notes` are the doctor's private notes. The summary screen only *hid* them
                 // from patients in the markup; they were still shipped to the browser.
                 notes: role === 'doctor' ? appointment.notes : null,
+                // The mirror image: the patient's own notes are theirs alone, so the
+                // doctor never receives them either.
+                patientNotes: role === 'patient' ? appointment.patientNotes : null,
                 followUpDate: appointment.followUpDate?.toISOString() ?? null,
             },
         }

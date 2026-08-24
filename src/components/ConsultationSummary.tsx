@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { useRouter } from 'next/navigation'
+import { Download } from 'lucide-react'
 
 interface ConsultationSummaryProps {
     // Every field is nullable: these come straight from the appointment row, where a
@@ -14,6 +15,7 @@ interface ConsultationSummaryProps {
         diagnosis?: string | null
         prescription?: string | null
         notes?: string | null
+        patientNotes?: string | null
         followUpDate?: string | null
         doctorName?: string | null
         patientName?: string | null
@@ -37,6 +39,90 @@ const ConsultationSummary: React.FC<ConsultationSummaryProps> = ({ appointment, 
         // A 90-second call used to render as "1 mins"; anything under a minute as "0 mins".
         if (seconds < 60) return `${seconds} sec`
         return `${Math.floor(seconds / 60)} mins`
+    }
+
+    /**
+     * Downloads the report as a self-contained HTML file the patient keeps offline.
+     *
+     * Deliberately not a screenshot of this page: it is generated from the same data,
+     * styled for printing, and opens in any browser. "Print" already existed but only
+     * ever reached a printer or the OS "Save as PDF" dialog — this gives an actual file.
+     */
+    const handleSaveReport = () => {
+        // Report content is user-entered free text (diagnosis, prescription, notes), so it
+        // must be escaped before being interpolated into HTML — otherwise a stray "<" in a
+        // dosage note would corrupt the document, and anything script-like would execute
+        // when the saved file is opened.
+        const escapeHtml = (value?: string | null) =>
+            String(value ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;')
+
+        const section = (title: string, body?: string | null, fallback = 'Not recorded.') =>
+            `<h2>${escapeHtml(title)}</h2><div class="box">${escapeHtml(body) || fallback}</div>`
+
+        const html = `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Consultation Report — ${escapeHtml(appointment.slotDate ?? '')}</title>
+<style>
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; color: #1f2937; max-width: 760px; margin: 40px auto; padding: 0 24px; line-height: 1.6; }
+  header { border-bottom: 2px solid #2563eb; padding-bottom: 16px; margin-bottom: 24px; }
+  h1 { margin: 0 0 4px; font-size: 24px; }
+  .meta { color: #6b7280; font-size: 14px; }
+  h2 { font-size: 16px; margin: 24px 0 8px; }
+  .box { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; white-space: pre-wrap; }
+  .grid { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
+  .grid div { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 14px; font-size: 14px; }
+  footer { margin-top: 32px; border-top: 1px solid #e5e7eb; padding-top: 12px; color: #9ca3af; font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Consultation Report</h1>
+  <p class="meta">
+    Doctor: ${escapeHtml(appointment.doctorName) || 'N/A'} &nbsp;·&nbsp;
+    Patient: ${escapeHtml(appointment.patientName) || 'N/A'}<br>
+    ${escapeHtml(appointment.slotDate ?? '')} ${escapeHtml(appointment.slotTime ?? '')}
+  </p>
+</header>
+
+<div class="grid">
+  <div><strong>Duration:</strong> ${escapeHtml(formatDuration(appointment.duration))}</div>
+  <div><strong>Start:</strong> ${escapeHtml(formatDate(appointment.startTime))}</div>
+  <div><strong>End:</strong> ${escapeHtml(formatDate(appointment.endTime))}</div>
+</div>
+
+${section('Diagnosis', appointment.diagnosis, 'No diagnosis recorded.')}
+${section('Prescription', appointment.prescription, 'No prescription issued.')}
+${appointment.followUpDate ? `<h2>Follow-Up</h2><div class="box">${escapeHtml(new Date(appointment.followUpDate).toDateString())}</div>` : ''}
+${role === 'patient' ? section('My Notes', appointment.patientNotes, 'No notes added.') : ''}
+${role === 'doctor' ? section('Private Notes', appointment.notes, 'No private notes.') : ''}
+
+<footer>
+  MediCare Post-Consultation Report &nbsp;·&nbsp; Reference: ${escapeHtml(appointment.id)}<br>
+  This report is a record of your consultation. Contact your doctor with any questions.
+</footer>
+</body>
+</html>`
+
+        const blob = new Blob([html], { type: 'text/html;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        // Date-stamped so a patient with several consultations gets distinct files rather
+        // than "report (3).html".
+        link.download = `medicare-consultation-${appointment.slotDate || appointment.id}.html`
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        // Releasing the object URL prevents the blob being held in memory for the life of
+        // the page.
+        URL.revokeObjectURL(url)
     }
 
     return (
@@ -104,6 +190,22 @@ const ConsultationSummary: React.FC<ConsultationSummaryProps> = ({ appointment, 
                     </div>
                 )}
 
+                {/* The patient's own notes — the mirror of the doctor's private notes, and
+                    shown only to them for the same reason. */}
+                {role === 'patient' && (
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+                            My Notes
+                            <span className="text-xs font-normal bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">Only visible to you</span>
+                        </h3>
+                        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-100">
+                            <p className="text-gray-700 whitespace-pre-wrap italic">
+                                {appointment.patientNotes || 'You did not add any notes for this consultation.'}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
                 {appointment.followUpDate && (
                     <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center gap-4">
                         <div className="bg-green-100 p-2 rounded-full">
@@ -120,6 +222,12 @@ const ConsultationSummary: React.FC<ConsultationSummaryProps> = ({ appointment, 
             <div className="bg-gray-50 px-8 py-6 border-t flex justify-between items-center">
                 <p className="text-sm text-gray-500">Medicare Post-Consultation Report</p>
                 <div className="flex gap-3">
+                    <button
+                        onClick={handleSaveReport}
+                        className="flex items-center gap-1.5 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-white transition-colors"
+                    >
+                        <Download className="w-4 h-4" /> Save Report
+                    </button>
                     <button
                         onClick={() => window.print()}
                         className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-white transition-colors"

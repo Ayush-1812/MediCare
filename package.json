@@ -25,6 +25,7 @@
     "next": "16.1.6",
     "nodemailer": "^9.0.5",
     "prisma": "^5.22.0",
+    "razorpay": "^2.9.8",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-markdown": "^10.1.0",
