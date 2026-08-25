@@ -18,7 +18,7 @@ const AdminLogin = () => {
         formData.append('password', password)
 
         const res = await loginAdmin(formData)
-        if (res.success && res.token) {
+        if (res.success) {
             localStorage.setItem('adminToken', res.token)
             toast.success('Login Successful')
             router.push('/admin/dashboard')

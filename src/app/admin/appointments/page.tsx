@@ -14,7 +14,7 @@ const Appointments = () => {
 
     const getAppointments = async () => {
         const res = await appointmentsAdmin()
-        if (res.success && res.appointments) {
+        if (res.success) {
             setAppointments(res.appointments.reverse())
         } else {
             toast.error(res.message)

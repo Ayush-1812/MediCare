@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs'
 import { revalidatePath } from 'next/cache'
 import { v2 as cloudinary } from 'cloudinary'
 import { createSession, destroySession, getSessionId } from '@/lib/auth'
+import { rateLimit, resetRateLimit, retryAfterMessage } from '@/lib/rateLimit'
 import {
     DEFAULT_SLOT_DURATION,
     DEFAULT_SLOT_END,
@@ -129,6 +130,11 @@ export async function registerDoctor(formData: FormData) {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Enter a valid email address')
         if (password.length < 8) return fail('Password must be at least 8 characters')
 
+        const signupLimit = rateLimit(`signup:doctor:${email}`, 10, 60 * 60 * 1000)
+        if (!signupLimit.allowed) {
+            return fail(`Too many sign-up attempts. ${retryAfterMessage(signupLimit.retryAfterSeconds)}`)
+        }
+
         const existing = await prisma.doctor.findUnique({ where: { email }, select: { id: true } })
         if (existing) return fail('An account with this email already exists')
 
@@ -159,11 +165,21 @@ export async function loginDoctor(formData: FormData) {
         const email = ((formData.get('email') as string) ?? '').trim().toLowerCase()
         const password = (formData.get('password') as string) ?? ''
 
+        // Same 5-per-15-minutes budget as patient login. Keyed separately from the patient
+        // namespace so the two account types cannot exhaust each other's allowance.
+        const limitKey = `login:doctor:${email}`
+        const limit = rateLimit(limitKey, 5, 15 * 60 * 1000)
+        if (!limit.allowed) {
+            return fail(`Too many login attempts. ${retryAfterMessage(limit.retryAfterSeconds)}`)
+        }
+
         const doctor = await prisma.doctor.findUnique({ where: { email } })
         // One message for both branches so the form cannot be used to enumerate accounts.
         if (!doctor || !(await bcrypt.compare(password, doctor.password))) {
             return fail('Invalid email or password')
         }
+
+        resetRateLimit(limitKey)
 
         const token = await createSession('doctor', doctor.id)
         return { success: true as const, token, profileCompleted: doctor.profileCompleted }

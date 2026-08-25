@@ -11,7 +11,7 @@ const DoctorsList = () => {
 
     const getDoctors = async () => {
         const res = await allDoctors()
-        if (res.success && res.doctors) {
+        if (res.success) {
             setDoctors(res.doctors)
         } else {
             toast.error(res.message)
