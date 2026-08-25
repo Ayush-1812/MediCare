@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs'
 import { revalidatePath } from 'next/cache'
 import { v2 as cloudinary } from 'cloudinary'
 import { createSession, destroySession, getSessionId } from '@/lib/auth'
+import { rateLimit, resetRateLimit, retryAfterMessage } from '@/lib/rateLimit'
 import { toSlotMap } from '@/lib/schedule'
 import { after } from 'next/server'
 import { sendAppointmentBookedEmails } from '@/lib/mail/appointmentEmails'
@@ -63,6 +64,14 @@ export async function registerUser(formData: FormData) {
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return fail('Enter a valid email address')
         if (password.length < 8) return fail('Password must be at least 8 characters')
 
+        // Caps automated signup floods. Deliberately looser than login (a person
+        // correcting a validation error should never hit it) and keyed separately, so a
+        // failed signup cannot eat into that email's login allowance.
+        const signupLimit = rateLimit(`signup:user:${email}`, 10, 60 * 60 * 1000)
+        if (!signupLimit.allowed) {
+            return fail(`Too many sign-up attempts. ${retryAfterMessage(signupLimit.retryAfterSeconds)}`)
+        }
+
         const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } })
         if (existing) return fail('An account with this email already exists')
 
@@ -92,11 +101,24 @@ export async function loginUser(formData: FormData) {
         const email = ((formData.get('email') as string) ?? '').trim().toLowerCase()
         const password = (formData.get('password') as string) ?? ''
 
+        // Throttled per email address: 5 attempts per 15 minutes. Without this, passwords
+        // can be guessed as fast as the network allows, and every guess costs a bcrypt
+        // comparison — expensive by design, which makes it a cheap denial-of-service too.
+        const limitKey = `login:user:${email}`
+        const limit = rateLimit(limitKey, 5, 15 * 60 * 1000)
+        if (!limit.allowed) {
+            return fail(`Too many login attempts. ${retryAfterMessage(limit.retryAfterSeconds)}`)
+        }
+
         const user = await prisma.user.findUnique({ where: { email } })
         // One message for both branches so the form cannot be used to enumerate accounts.
         if (!user || !(await bcrypt.compare(password, user.password))) {
             return fail('Invalid email or password')
         }
+
+        // Proving identity clears the counter, so earlier typos do not shorten the next
+        // legitimate session's allowance.
+        resetRateLimit(limitKey)
 
         const token = await createSession('user', user.id)
         return { success: true as const, token }
