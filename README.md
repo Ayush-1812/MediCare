@@ -1,593 +1,334 @@
-<<<<<<< Updated upstream
+# 🏥 MediCare — AI-Powered Telemedicine Platform
 
-# 🏥 MediCare — AI-Powered Healthcare Platform
+A full-stack healthcare platform where patients book doctors, consult over peer-to-peer video, digitise prescriptions with OCR, find nearby pharmacies, and chat with **Aether AI** — a medical assistant grounded in their own records.
 
-=======
-<<<<<<< HEAD
-
-# 🏥 MediCare – AI-Powered Healthcare Management Platform
-
-> > > > > > > Stashed changes
-
-> A full-stack, production-grade healthcare platform that lets patients book appointments with doctors, upload and analyse prescriptions via OCR, video-consult their doctor, find nearby pharmacies, and chat with **Aether AI** — an intelligent medical assistant powered by Google Gemini 2.5 Flash.
+Built with **Next.js 16**, **React 19**, **TypeScript**, **PostgreSQL/Prisma**, **WebRTC**, and the **Google Gemini API**.
 
 ---
 
 ## 📋 Table of Contents
 
-- [Problem Statement](#-problem-statement)
+- [Problem](#-problem)
 - [Key Features](#-key-features)
-- [Technology Stack](#-technology-stack)
+- [Tech Stack](#-tech-stack)
 - [High-Level Architecture](#-high-level-architecture)
-- [Folder Structure](#-folder-structure)
-- [Installation](#-installation)
+- [How Video Consultation Works](#-how-video-consultation-works)
+- [How Aether AI Works](#-how-aether-ai-works)
+- [Data Model](#-data-model)
+- [Project Structure](#-project-structure)
+- [Getting Started](#-getting-started)
 - [Environment Variables](#-environment-variables)
-- [Running Locally](#-running-locally)
 - [Running with Docker](#-running-with-docker)
-- [Deployment](#-deployment)
-- [Future Scope](#-future-scope)
+- [Security](#-security)
+- [Roadmap](#-roadmap)
 
 ---
 
-## ⚠️ Problem Statement
+## ⚠️ Problem
 
-Healthcare access remains fragmented for millions of people:
+Healthcare access is fragmented:
 
-- Booking doctor appointments requires multiple phone calls and manual coordination.
-- Prescriptions are paper-based and hard to track or digitize.
-- There is no convenient way to find pharmacies near you after a late-night consultation.
-- Patients have no intelligent assistant to answer general health questions or assess symptoms around the clock.
-- Video consultation is either expensive or unavailable in existing hospital management systems.
+- Booking an appointment means phone calls and manual coordination.
+- Prescriptions are paper-based, easy to lose, and hard to search.
+- After a late-night consultation, there's no quick way to find an open pharmacy.
+- Patients have no always-available assistant for general health questions.
+- Video consultation is usually either expensive or bolted on badly.
 
-**MediCare solves all of these problems in one unified platform.**
+MediCare brings these into one platform, with a role-separated experience for **patients**, **doctors**, and **admins**.
 
 ---
 
 ## ✨ Key Features
 
-| Feature                    | Description                                                                                    |
-| -------------------------- | ---------------------------------------------------------------------------------------------- |
-| 🔐 **Authentication**      | JWT-based login/register for Patients, Doctors, and Admins                                     |
-| 📅 **Appointment Booking** | Browse doctors by speciality, view available time slots, book and cancel                       |
-| 🎥 **Video Consultation**  | Real-time video call between doctor and patient with a built-in meeting room                   |
-| 📄 **Prescription OCR**    | Upload a prescription image → Tesseract.js extracts text → fuzzy-matched against a medicine DB |
-| 🏥 **Doctor Dashboard**    | Doctors can mark appointments complete, write diagnoses, prescriptions, and notes              |
-| 🗺️ **Nearby Pharmacies**   | One-click geolocation → SerpAPI → shows pharmacies sorted by rating                            |
-| 🤖 **Aether AI**           | AI healthcare assistant: symptom assessment, appointment queries, health summaries             |
-| 💬 **Conversation Memory** | All AI conversations persisted in PostgreSQL and restored on demand                            |
-| 👤 **Patient Profile**     | Update personal information, upload profile photo via Cloudinary                               |
-| 🛡️ **Admin Panel**         | Manage all doctors and appointments platform-wide                                              |
+| Feature | Description |
+|---|---|
+| 🔐 **Role-Based Auth** | JWT sessions in httpOnly cookies, with separate patient / doctor / admin roles and route-level enforcement |
+| 📅 **Appointment Booking** | Browse by speciality, see live slot availability, book and cancel — slot conflicts prevented by a DB transaction |
+| 🎥 **Video Consultation** | Peer-to-peer WebRTC calls with screen share, fullscreen, and a Google-Meet-style UI |
+| 📝 **Consultation Records** | Doctors write diagnosis, prescription and private notes; patients keep their own private notes |
+| 📄 **Prescription OCR** | Upload a prescription image → Tesseract.js extracts text → fuzzy-matched against a medicine list |
+| 🗺️ **Nearby Pharmacies** | Geolocation → SerpAPI → results sorted by true haversine distance from the user |
+| 🤖 **Aether AI** | Gemini-powered assistant with intent routing, tool-based retrieval over real records, and conversation memory |
+| 💳 **Online Payments** | Razorpay checkout with server-side HMAC-SHA256 signature verification, plus a pay-at-clinic option |
+| 📧 **Email Notifications** | Nodemailer confirmations to both patient and doctor, sent after the booking commits |
+| 🛡️ **Admin Panel** | Platform-wide management of doctors and appointments |
 
 ---
 
-## 🛠️ Technology Stack
+## 🛠️ Tech Stack
 
 ### Frontend
+- **Next.js 16** (App Router, Server Actions, Middleware)
+- **React 19**
+- **TypeScript 5**
+- **Tailwind CSS 4**
+- **lucide-react** (icons), **react-toastify** (notifications), **react-markdown**
 
-| Technology   | Version  | Purpose                                 |
-| ------------ | -------- | --------------------------------------- |
-| Next.js      | 16.1.6   | Full-stack React framework (App Router) |
-| React        | 19.2.3   | UI component library                    |
-| TypeScript   | ^5       | Type safety across the entire codebase  |
-| TailwindCSS  | ^4       | Utility-first styling                   |
-| Lucide React | ^0.563.0 | Icon library                            |
+### Backend & Data
+- **Next.js Server Actions** + **Route Handlers** (REST)
+- **Node.js** custom server (hosts Next + the WebSocket signalling layer)
+- **PostgreSQL** (Supabase)
+- **Prisma ORM 5**
+- **JWT** (`jsonwebtoken`) + **bcryptjs**
 
-### Backend & Database
+### Real-Time & AI
+- **WebRTC** — peer-to-peer audio/video
+- **Socket.IO** — SDP/ICE signalling
+- **Redis** (`ioredis` + `@socket.io/redis-adapter`) — cross-instance signalling
+- **Google Gemini 2.5 Flash** (`@google/genai`)
+- **Tesseract.js** — prescription OCR
 
-| Technology            | Version | Purpose                     |
-| --------------------- | ------- | --------------------------- |
-| Prisma ORM            | ^5.22.0 | Type-safe database access   |
-| PostgreSQL (Supabase) | —       | Primary relational database |
-| JWT (jsonwebtoken)    | ^9.0.3  | Authentication tokens       |
-| bcryptjs              | ^3.0.3  | Password hashing            |
-| Zod                   | ^4.3.6  | Runtime schema validation   |
-
-### AI & External Services
-
-| Technology              | Purpose                                 |
-| ----------------------- | --------------------------------------- |
-| Google Gemini 2.5 Flash | Core LLM for Aether AI                  |
-| Tesseract.js            | Client-side OCR for prescription images |
-| string-similarity       | Fuzzy medicine name matching            |
-| Cloudinary              | Image storage                           |
-| SerpAPI                 | Pharmacy search via Google Maps         |
+### Services & Infra
+- **Razorpay** — payments
+- **Cloudinary** — image storage
+- **Nodemailer** — transactional email
+- **SerpAPI** — pharmacy search
+- **Docker** + **docker-compose** — multi-stage build, non-root runtime
 
 ---
 
 ## 🏗️ High-Level Architecture
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                  Next.js 16 (App Router)             │
-│  ┌──────────────┐  ┌───────────────┐  ┌───────────┐ │
-│  │  React Pages │  │ Server Actions│  │ API Routes│ │
-│  │  (Client)    │  │  (DB Access)  │  │ (REST/AI) │ │
-│  └──────┬───────┘  └──────┬────────┘  └─────┬─────┘ │
-└─────────┼─────────────────┼────────────────┼─────────┘
-          │                 │                │
-          ▼                 ▼                ▼
-   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-   │   AppContext  │  │  Prisma ORM  │  │  AI Pipeline │
-   │  (Global     │  │  (PostgreSQL │  │  (Gemini 2.5 │
-   │   State)     │  │   Supabase)  │  │   Flash)     │
-   └──────────────┘  └──────────────┘  └──────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                        CLIENT (Browser)                          │
+│   React 19 · Next.js App Router · Tailwind                       │
+│   Patient UI    │    Doctor Dashboard    │    Admin Panel        │
+└───────┬──────────────────┬───────────────────────┬───────────────┘
+        │ Server Actions   │ WebSocket             │ WebRTC
+        │ + REST           │ (signalling only)     │ (media, P2P)
+        ▼                  ▼                       │
+┌──────────────────────────────────────────┐       │
+│         Node.js Server (server.js)       │       │
+│  ┌────────────────────────────────────┐  │       │
+│  │ Next.js  – SSR, Server Actions     │  │       │
+│  │ Middleware – role-based routing    │  │       │
+│  └────────────────────────────────────┘  │       │
+│  ┌────────────────────────────────────┐  │       │
+│  │ Socket.IO – authenticated rooms    │  │       │
+│  │   · verifies JWT on handshake      │  │       │
+│  │   · relays SDP / ICE only          │  │       │
+│  └────────────────────────────────────┘  │       │
+└───┬──────────────┬──────────────┬────────┘       │
+    │              │              │                │
+    ▼              ▼              ▼                ▼
+┌────────┐   ┌──────────┐   ┌──────────┐   ┌───────────────┐
+│Postgres│   │  Redis   │   │ External │   │  Other Peer   │
+│ Prisma │   │ pub/sub  │   │ Services │   │ (direct media)│
+└────────┘   └──────────┘   └──────────┘   └───────────────┘
+                             Gemini · Razorpay
+                             Cloudinary · SerpAPI · SMTP
 ```
 
-### AI Pipeline (Aether AI)
-
-```
-User Message
-  → Intent Router (keyword detection)
-  → Tool Registry (tool lookup)
-  → Tool Execution (DB queries / symptom extraction)
-  → Context Builder (data cleaning & merging)
-  → Prompt Manager (system + intent prompts)
-  → Gemini 2.5 Flash (LLM generation)
-  → Response Formatter (post-processing)
-  → Streaming Response (word-by-word to frontend)
-```
+**Key architectural point:** media never touches the server. Socket.IO carries only the few hundred bytes needed to introduce two browsers to each other; video and audio then flow directly peer-to-peer. Redis fans signalling events across instances so the app scales horizontally.
 
 ---
 
-## 📂 Folder Structure
+## 🎥 How Video Consultation Works
 
 ```
-medicare--/
-├── prisma/schema.prisma           # Database schema
+Doctor                     Signalling Server                    Patient
+  │                                │                               │
+  │──── connect (JWT cookie) ─────▶│◀──── connect (JWT cookie) ────│
+  │                                │  verifies session +           │
+  │                                │  appointment membership       │
+  │                                │                               │
+  │◀─────── peer-joined ───────────│──────── peer-joined ─────────▶│
+  │                                │                               │
+  │──────── SDP offer ────────────▶│───────── SDP offer ──────────▶│
+  │◀─────── SDP answer ────────────│◀──────── SDP answer ──────────│
+  │◀────── ICE candidates ────────▶│◀────── ICE candidates ───────▶│
+  │                                │                               │
+  │═══════════ direct peer-to-peer audio / video ═════════════════▶│
+  │                                │                               │
+  │─── consultation-ended ────────▶│──── consultation-ended ──────▶│
+```
+
+Design decisions worth noting:
+
+- **Fixed roles** — the doctor is always the caller, the patient always the callee. This removes SDP "glare" entirely, so neither side needs perfect-negotiation rollback logic.
+- **ICE candidate queueing** — candidates routinely arrive before the remote description exists. Applying one early throws and the call silently never connects, so they're buffered until the description is set.
+- **Room slots by identity, not headcount** — one doctor slot and one patient slot. A duplicate tab or reconnect evicts its own stale socket instead of being refused, so a lingering connection can never lock out the real participant.
+- **Dual end-of-call signalling** — a real-time socket event ends the call instantly, with polling as a fallback if that event is missed.
+
+---
+
+## 🤖 How Aether AI Works
+
+```
+User message
+     │
+     ▼
+┌──────────────┐   keyword + intent matching
+│ IntentRouter │──────────────────────────────┐
+└──────────────┘                              │
+     │ selects tools                          │
+     ▼                                        │
+┌──────────────┐   real Prisma queries        │
+│ ToolRegistry │   scoped to this patient     │
+│  · Appointment · Prescription               │
+│  · Timeline    · Profile · HealthSummary    │
+│  · SymptomAssessment (+ severity classifier)│
+└──────────────┘                              │
+     │ tool results                           │
+     ▼                                        ▼
+┌────────────────┐              ┌──────────────────────┐
+│ ContextBuilder │─────────────▶│    PromptManager     │
+│ strips IDs,    │              │ system + intent      │
+│ nulls, secrets │              │ prompts + history    │
+└────────────────┘              └──────────────────────┘
+                                          │
+                                          ▼
+                                ┌──────────────────────┐
+                                │  Gemini 2.5 Flash    │
+                                │  temp 0.3, streamed  │
+                                └──────────────────────┘
+                                          │
+                                          ▼
+                                  Grounded response
+```
+
+The assistant answers **only** from the patient's real records. Where MediCare has no data source for a category (e.g. lab reports), the tool says so explicitly rather than letting the model invent plausible-looking results — an important property for a healthcare assistant.
+
+---
+
+## 🗄️ Data Model
+
+```
+User ──────┬──< Appointment >──┬────── Doctor
+           │                   │
+           │                   └── diagnosis, prescription,
+           │                       notes (doctor-private),
+           │                       patientNotes (patient-private),
+           │                       meetingId, duration, payment
+           │
+           ├──< Prescription        (OCR image + extracted medicines)
+           │
+           └──< Conversation ──< Message   (Aether AI chat history)
+```
+
+Six models: `User`, `Doctor`, `Appointment`, `Prescription`, `Conversation`, `Message`.
+
+Note the deliberate symmetry on `Appointment`: `notes` is the doctor's private field and `patientNotes` is the patient's. Each is stripped server-side before the other party ever receives it — privacy enforced in the data layer, not just hidden in the UI.
+
+---
+
+## 📂 Project Structure
+
+```
+medicare/
+├── server.js                  # Custom Node server: Next.js + Socket.IO signalling
+├── prisma/schema.prisma       # Database schema
 ├── src/
 │   ├── app/
-│   │   ├── api/chat/              # AI chat REST endpoints
-│   │   ├── api/nearby-pharmacies/ # Pharmacy search API
-│   │   ├── actions/               # Server Actions (auth, appointments, etc.)
-│   │   ├── ai-assistant/          # Aether AI page
-│   │   ├── appointment/           # Booking pages
-│   │   ├── doctor-dashboard/      # Doctor portal
-│   │   ├── admin/                 # Admin panel
-│   │   ├── pharmacies/            # Nearby pharmacies page
-│   │   └── video-call/            # Video consultation page
-│   ├── components/AIAssistant/    # Chat UI components
-│   ├── context/AppContext.tsx     # Global React context
-│   └── lib/
-│       ├── ai/
-│       │   ├── AIOrchestrator.ts  # Main AI coordinator
-│       │   ├── IntentRouter.ts    # Intent detection
-│       │   ├── ToolRegistry.ts    # Tool management
-│       │   ├── ResponseFormatter.ts
-│       │   ├── classifiers/       # SeverityClassifier
-│       │   ├── contextBuilder/    # ContextBuilder
-│       │   ├── promptManager/     # PromptManager
-│       │   ├── prompts/           # Per-intent prompts (11 files)
-│       │   ├── services/          # GeminiService (singleton)
-│       │   └── tools/             # AI tools
-│       ├── ocrService.ts          # Prescription OCR
-│       └── prisma.ts              # Prisma singleton
-└── src/middleware.ts              # Route protection
+│   │   ├── actions/           # Server Actions (user, doctor, admin, consultation, payment)
+│   │   ├── api/               # Route Handlers (chat, health checks, pharmacies)
+│   │   ├── admin/             # Admin panel
+│   │   ├── doctor-dashboard/  # Doctor portal
+│   │   ├── video-call/        # Consultation room
+│   │   └── ...                # Patient-facing pages
+│   ├── components/            # Shared UI (VideoCallStage, ConsultationPanel, …)
+│   ├── lib/
+│   │   ├── ai/                # Aether AI: orchestrator, tools, prompts, Gemini service
+│   │   ├── webrtc/            # useWebRTCCall hook
+│   │   ├── payment/           # Razorpay checkout loader
+│   │   ├── mail/              # Email templates + transport
+│   │   ├── auth.ts            # JWT session helpers
+│   │   └── rateLimit.ts       # Auth endpoint throttling
+│   └── middleware.ts          # Role-based route protection
+└── docker-compose.yml
 ```
 
 ---
 
-## ⚙️ Installation
+## ⚙️ Getting Started
 
 ### Prerequisites
+- Node.js 20+
+- PostgreSQL (or a Supabase project)
+- API keys: Google Gemini, Cloudinary, SerpAPI, Razorpay (optional), SMTP (optional)
 
-- Node.js 18+
-- PostgreSQL database (Supabase recommended)
-- Google Gemini API key
-- Cloudinary account
-- SerpAPI key
-
-### Steps
+### Setup
 
 ```bash
-# Clone the repository
-git clone https://github.com/Ayush-1812/medicare--.git
-cd medicare--
-
-# Install dependencies
+# 1. Clone and install
+git clone <your-repo-url>
+cd medicare
 npm install
 
-# Set up environment variables
+# 2. Configure environment
 cp .env.example .env
-# Edit .env with your credentials
+#    Fill in at minimum: DATABASE_URL, JWT_SECRET, GEMINI_API_KEY
 
-# Push Prisma schema to database
+# 3. Push the schema to your database
 npx prisma db push
 
-# Start development server
+# 4. Start
 npm run dev
 ```
+
+Open <http://localhost:3000>.
+
+> **Note:** video consultation requires the custom server (`node server.js`), which hosts the Socket.IO signalling layer. Plain `next dev` serves every other feature but cannot host WebSockets.
 
 ---
 
 ## 🔑 Environment Variables
 
-```env
-# Database (Supabase PostgreSQL)
-DATABASE_URL="postgresql://..."
-DIRECT_URL="postgresql://..."   # non-pooled connection, used for `prisma db push`
+See `.env.example` for the full annotated list. Essentials:
 
-# Authentication
-JWT_SECRET="your-super-secret-jwt-key"
+| Variable | Required | Purpose |
+|---|---|---|
+| `DATABASE_URL` | ✅ | PostgreSQL connection string |
+| `JWT_SECRET` | ✅ | Signs session tokens |
+| `GEMINI_API_KEY` | ✅ | Aether AI |
+| `CLOUDINARY_*` | ✅ | Profile photos, prescription images |
+| `SERPAPI_KEY` | ✅ | Nearby pharmacy search |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD_HASH` | ✅ | Admin login (bcrypt hash preferred) |
+| `APP_URL` | ⬜ | Base URL used in email links |
+| `SMTP_*` | ⬜ | Email notifications — bookings still succeed without it |
+| `RAZORPAY_KEY_ID` / `_SECRET` | ⬜ | Online payments — falls back to pay-at-clinic |
+| `REDIS_URL` | ⬜ | Multi-instance signalling; single instance works without it |
+| `TURN_URLS` / `TURN_USERNAME` / `TURN_CREDENTIAL` | ⬜ | Relay for restrictive networks (see below) |
 
-# AI
-GEMINI_API_KEY="your-gemini-api-key"
-
-# Image Storage
-CLOUDINARY_CLOUD_NAME="your-cloud-name"
-CLOUDINARY_API_KEY="your-cloudinary-api-key"
-CLOUDINARY_API_SECRET="your-cloudinary-api-secret"
-
-# Pharmacy Search
-SERPAPI_KEY="your-serpapi-key"
-
-# Seeded admin login
-ADMIN_EMAIL="admin@medicare.com"
-ADMIN_PASSWORD="your-admin-password"
-```
-
-See [`.env.example`](./.env.example) for a ready-to-copy template.
-
----
-
-## 🚀 Running Locally
-
-```bash
-npm run dev     # Start development server (http://localhost:3000)
-npm run build   # Production build
-npm start       # Start production server
-npm run lint    # Run ESLint
-```
+Optional keys degrade gracefully — a missing SMTP host logs the skipped email instead of failing the booking.
 
 ---
 
 ## 🐳 Running with Docker
 
-The app ships with a multi-stage `Dockerfile` and a `docker-compose.yml` that runs the
-app alongside its own local PostgreSQL container — no Supabase account needed to try it.
-
 ```bash
-# 1. Copy the env template and fill in at least JWT_SECRET, GEMINI_API_KEY, ADMIN_PASSWORD
-cp .env.example .env
-
-# 2. Build and start both containers
+cp .env.example .env      # fill in JWT_SECRET, GEMINI_API_KEY, ADMIN_PASSWORD_HASH …
 docker compose up --build
 ```
 
-That's it — on first boot the `app` container automatically runs `prisma db push`
-against the bundled Postgres before starting Next.js, so the schema is ready with no
-manual step. Visit **http://localhost:3000**.
-
-```bash
-docker compose down        # stop the stack
-docker compose down -v     # stop and also wipe the local database volume
-docker compose logs -f app # tail app logs
-```
-
-**Notes:**
-
-- `DATABASE_URL`/`DIRECT_URL` are set inside `docker-compose.yml` to point at the
-  bundled `postgres` service — values in your `.env` for those two are ignored by
-  Docker Compose on purpose, so pointing this stack at your local Postgres can never
-  accidentally touch a real Supabase database.
-- `CLOUDINARY_*` and `SERPAPI_KEY` are optional for basic local testing (profile-photo
-  upload, prescription upload, and the pharmacy finder simply won't work without them).
-- The auto `prisma db push` on boot only runs because `docker-compose.yml` sets
-  `RUN_DB_PUSH=true` — it's off by default in the raw `Dockerfile` so pointing the image
-  at an external database elsewhere never silently changes its schema.
-
-# <<<<<<< Updated upstream
-
-=======
-
-# 🏥 MediCare — AI-Powered Healthcare Platform
-
-> A full-stack, production-grade healthcare platform that lets patients book appointments with doctors, upload and analyse prescriptions via OCR, video-consult their doctor, find nearby pharmacies, and chat with **Aether AI** — an intelligent medical assistant powered by Google Gemini 2.5 Flash.
+Brings up the app and a PostgreSQL instance. The image uses a multi-stage build and runs as a non-root user; `RUN_DB_PUSH=true` syncs the schema on boot for the bundled database.
 
 ---
 
-## 📋 Table of Contents
+## 🔒 Security
 
-- [Problem Statement](#-problem-statement)
-- [Key Features](#-key-features)
-- [Technology Stack](#-technology-stack)
-- [High-Level Architecture](#-high-level-architecture)
-- [Folder Structure](#-folder-structure)
-- [Installation](#-installation)
-- [Environment Variables](#-environment-variables)
-- [Running Locally](#-running-locally)
-- [Running with Docker](#-running-with-docker)
-- [Deployment](#-deployment)
-- [Future Scope](#-future-scope)
+- **JWT sessions in httpOnly cookies** — not readable from JavaScript; the `role` claim is verified, so a patient token cannot be replayed as a doctor's.
+- **Authorization at the action layer** — Server Actions are POST endpoints callable by anyone, so every privileged action verifies the session itself rather than trusting the UI.
+- **Role-based middleware** — `/admin/*` requires an admin session, `/doctor-dashboard/*` a doctor session.
+- **Rate limiting** — login and registration are throttled per account to blunt brute-force attempts.
+- **bcrypt password hashing**, with constant-time comparison on the admin credential path.
+- **Payment integrity** — Razorpay callbacks are verified by recomputing the HMAC-SHA256 signature server-side; the client's "success" callback is never trusted on its own.
+- **Data minimisation** — server responses strip fields the requester shouldn't see (doctor's private notes, patient's private notes, password hashes).
 
 ---
 
-## ⚠️ Problem Statement
+## 🗺️ Roadmap
 
-Healthcare access remains fragmented for millions of people:
-
-- Booking doctor appointments requires multiple phone calls and manual coordination.
-- Prescriptions are paper-based and hard to track or digitize.
-- There is no convenient way to find pharmacies near you after a late-night consultation.
-- Patients have no intelligent assistant to answer general health questions or assess symptoms around the clock.
-- Video consultation is either expensive or unavailable in existing hospital management systems.
-
-**MediCare solves all of these problems in one unified platform.**
+- [ ] TURN server for reliable connections on restrictive networks — without one, roughly 10–20% of peer pairs (symmetric NAT, corporate firewalls) can't establish a direct path
+- [ ] Automated test suite (unit + E2E)
+- [ ] Doctor ratings and reviews
+- [ ] Appointment reminders and cancellation emails
+- [ ] Multi-participant consultations
+- [ ] Structured audit logging
 
 ---
 
-## ✨ Key Features
+## 📄 License
 
-| Feature                    | Description                                                                                    |
-| -------------------------- | ---------------------------------------------------------------------------------------------- |
-| 🔐 **Authentication**      | JWT-based login/register for Patients, Doctors, and Admins                                     |
-| 📅 **Appointment Booking** | Browse doctors by speciality, view available time slots, book and cancel                       |
-| 🎥 **Video Consultation**  | Real-time video call between doctor and patient with a built-in meeting room                   |
-| 📄 **Prescription OCR**    | Upload a prescription image → Tesseract.js extracts text → fuzzy-matched against a medicine DB |
-| 🏥 **Doctor Dashboard**    | Doctors can mark appointments complete, write diagnoses, prescriptions, and notes              |
-| 🗺️ **Nearby Pharmacies**   | One-click geolocation → SerpAPI → shows pharmacies sorted by rating                            |
-| 🤖 **Aether AI**           | AI healthcare assistant: symptom assessment, appointment queries, health summaries             |
-| 💬 **Conversation Memory** | All AI conversations persisted in PostgreSQL and restored on demand                            |
-| 👤 **Patient Profile**     | Update personal information, upload profile photo via Cloudinary                               |
-| 🛡️ **Admin Panel**         | Manage all doctors and appointments platform-wide                                              |
-
----
-
-## 🛠️ Technology Stack
-
-### Frontend
-
-| Technology   | Version  | Purpose                                 |
-| ------------ | -------- | --------------------------------------- |
-| Next.js      | 16.1.6   | Full-stack React framework (App Router) |
-| React        | 19.2.3   | UI component library                    |
-| TypeScript   | ^5       | Type safety across the entire codebase  |
-| TailwindCSS  | ^4       | Utility-first styling                   |
-| Lucide React | ^0.563.0 | Icon library                            |
-
-### Backend & Database
-
-| Technology            | Version | Purpose                     |
-| --------------------- | ------- | --------------------------- |
-| Prisma ORM            | ^5.22.0 | Type-safe database access   |
-| PostgreSQL (Supabase) | —       | Primary relational database |
-| JWT (jsonwebtoken)    | ^9.0.3  | Authentication tokens       |
-| bcryptjs              | ^3.0.3  | Password hashing            |
-| Zod                   | ^4.3.6  | Runtime schema validation   |
-
-### AI & External Services
-
-| Technology              | Purpose                                 |
-| ----------------------- | --------------------------------------- |
-| Google Gemini 2.5 Flash | Core LLM for Aether AI                  |
-| Tesseract.js            | Client-side OCR for prescription images |
-| string-similarity       | Fuzzy medicine name matching            |
-| Cloudinary              | Image storage                           |
-| SerpAPI                 | Pharmacy search via Google Maps         |
-
----
-
-## 🏗️ High-Level Architecture
-
-```
-┌─────────────────────────────────────────────────────┐
-│                  Next.js 16 (App Router)             │
-│  ┌──────────────┐  ┌───────────────┐  ┌───────────┐ │
-│  │  React Pages │  │ Server Actions│  │ API Routes│ │
-│  │  (Client)    │  │  (DB Access)  │  │ (REST/AI) │ │
-│  └──────┬───────┘  └──────┬────────┘  └─────┬─────┘ │
-└─────────┼─────────────────┼────────────────┼─────────┘
-          │                 │                │
-          ▼                 ▼                ▼
-   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-   │   AppContext  │  │  Prisma ORM  │  │  AI Pipeline │
-   │  (Global     │  │  (PostgreSQL │  │  (Gemini 2.5 │
-   │   State)     │  │   Supabase)  │  │   Flash)     │
-   └──────────────┘  └──────────────┘  └──────────────┘
-```
-
-### AI Pipeline (Aether AI)
-
-```
-User Message
-  → Intent Router (keyword detection)
-  → Tool Registry (tool lookup)
-  → Tool Execution (DB queries / symptom extraction)
-  → Context Builder (data cleaning & merging)
-  → Prompt Manager (system + intent prompts)
-  → Gemini 2.5 Flash (LLM generation)
-  → Response Formatter (post-processing)
-  → Streaming Response (word-by-word to frontend)
-```
-
----
-
-## 📂 Folder Structure
-
-```
-medicare--/
-├── prisma/schema.prisma           # Database schema
-├── src/
-│   ├── app/
-│   │   ├── api/chat/              # AI chat REST endpoints
-│   │   ├── api/nearby-pharmacies/ # Pharmacy search API
-│   │   ├── actions/               # Server Actions (auth, appointments, etc.)
-│   │   ├── ai-assistant/          # Aether AI page
-│   │   ├── appointment/           # Booking pages
-│   │   ├── doctor-dashboard/      # Doctor portal
-│   │   ├── admin/                 # Admin panel
-│   │   ├── pharmacies/            # Nearby pharmacies page
-│   │   └── video-call/            # Video consultation page
-│   ├── components/AIAssistant/    # Chat UI components
-│   ├── context/AppContext.tsx     # Global React context
-│   └── lib/
-│       ├── ai/
-│       │   ├── AIOrchestrator.ts  # Main AI coordinator
-│       │   ├── IntentRouter.ts    # Intent detection
-│       │   ├── ToolRegistry.ts    # Tool management
-│       │   ├── ResponseFormatter.ts
-│       │   ├── classifiers/       # SeverityClassifier
-│       │   ├── contextBuilder/    # ContextBuilder
-│       │   ├── promptManager/     # PromptManager
-│       │   ├── prompts/           # Per-intent prompts (11 files)
-│       │   ├── services/          # GeminiService (singleton)
-│       │   └── tools/             # AI tools
-│       ├── ocrService.ts          # Prescription OCR
-│       └── prisma.ts              # Prisma singleton
-└── src/middleware.ts              # Route protection
-```
-
----
-
-## ⚙️ Installation
-
-### Prerequisites
-
-- Node.js 18+
-- PostgreSQL database (Supabase recommended)
-- Google Gemini API key
-- Cloudinary account
-- SerpAPI key
-
-### Steps
-
-```bash
-# Clone the repository
-git clone https://github.com/Ayush-1812/medicare--.git
-cd medicare--
-
-# Install dependencies
-npm install
-
-# Set up environment variables
-cp .env.example .env
-# Edit .env with your credentials
-
-# Push Prisma schema to database
-npx prisma db push
-
-# Start development server
-npm run dev
-```
-
----
-
-## 🔑 Environment Variables
-
-```env
-# Database (Supabase PostgreSQL)
-DATABASE_URL="postgresql://..."
-DIRECT_URL="postgresql://..."   # non-pooled connection, used for `prisma db push`
-
-# Authentication
-JWT_SECRET="your-super-secret-jwt-key"
-
-# AI
-GEMINI_API_KEY="your-gemini-api-key"
-
-# Image Storage
-CLOUDINARY_CLOUD_NAME="your-cloud-name"
-CLOUDINARY_API_KEY="your-cloudinary-api-key"
-CLOUDINARY_API_SECRET="your-cloudinary-api-secret"
-
-# Pharmacy Search
-SERPAPI_KEY="your-serpapi-key"
-
-# Seeded admin login
-ADMIN_EMAIL="admin@medicare.com"
-ADMIN_PASSWORD="your-admin-password"
-```
-
-See [`.env.example`](./.env.example) for a ready-to-copy template.
-
----
-
-## 🚀 Running Locally
-
-```bash
-npm run dev     # Start development server (http://localhost:3000)
-npm run build   # Production build
-npm start       # Start production server
-npm run lint    # Run ESLint
-```
-
----
-
-## 🐳 Running with Docker
-
-The app ships with a multi-stage `Dockerfile` and a `docker-compose.yml` that runs the
-app alongside its own local PostgreSQL container — no Supabase account needed to try it.
-
-```bash
-# 1. Copy the env template and fill in at least JWT_SECRET, GEMINI_API_KEY, ADMIN_PASSWORD
-cp .env.example .env
-
-# 2. Build and start both containers
-docker compose up --build
-```
-
-That's it — on first boot the `app` container automatically runs `prisma db push`
-against the bundled Postgres before starting Next.js, so the schema is ready with no
-manual step. Visit **http://localhost:3000**.
-
-```bash
-docker compose down        # stop the stack
-docker compose down -v     # stop and also wipe the local database volume
-docker compose logs -f app # tail app logs
-```
-
-**Notes:**
-
-- `DATABASE_URL`/`DIRECT_URL` are set inside `docker-compose.yml` to point at the
-  bundled `postgres` service — values in your `.env` for those two are ignored by
-  Docker Compose on purpose, so pointing this stack at your local Postgres can never
-  accidentally touch a real Supabase database.
-- `CLOUDINARY_*` and `SERPAPI_KEY` are optional for basic local testing (profile-photo
-  upload, prescription upload, and the pharmacy finder simply won't work without them).
-- The auto `prisma db push` on boot only runs because `docker-compose.yml` sets
-  `RUN_DB_PUSH=true` — it's off by default in the raw `Dockerfile` so pointing the image
-  at an external database elsewhere never silently changes its schema.
-
-> > > > > > > Stashed changes
-
----
-
-## ☁️ Deployment
-
-Deployed on **Vercel** with **Supabase** as the hosted PostgreSQL database.
-
-```bash
-# Install Vercel CLI
-npm i -g vercel
-
-# Deploy to production
-vercel --prod
-```
-
-The `postinstall` script (`prisma generate`) runs automatically during Vercel deployment.
-
----
-
-## 🔮 Future Scope
-
-- [ ] Prescription Intelligence — AI drug interaction analysis
-- [ ] Health Timeline AI — Automated health narrative from visit history
-- [ ] Redis Caching — Reduce AI context build latency
-- [ ] Dark Mode — Full dark theme support
-- [ ] Push Notifications — Appointment reminders
-- [x] Docker Containerization — `docker-compose` for reproducible environments
-- [ ] Medical Reports AI — LLM analysis of lab reports
-
----
-
-## 👤 Author
-
-**Ayush Jangid** — B.Tech CSE (AI) Student
-
----
-
-> 📘 For the complete technical deep-dive, see [PROJECT_DOCUMENTATION.md](./PROJECT_DOCUMENTATION.md)
-
-# <<<<<<< Updated upstream
-
-> > > > > > > fb28285 (docker integration)
-> > > > > > > Stashed changes
+Released under the MIT License.
