@@ -69,6 +69,10 @@ const Pharmacies = () => {
             {
                 enableHighAccuracy: true,
                 timeout: 10000,
+                // Force a fresh fix. The default allows the browser to hand back a cached
+                // position of any age, so "Refresh Location" could silently return where
+                // the device was hours ago — and the results would be centred there.
+                maximumAge: 0,
             }
         )
     }

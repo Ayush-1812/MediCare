@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import AppContextProvider from "@/context/AppContext";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
+import AppChrome from "@/components/AppChrome";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -31,12 +30,8 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <AppContextProvider>
-          <div className="mx-4 sm:mx-[10%]">
-            <ToastContainer />
-            <Navbar />
-            {children}
-            <Footer />
-          </div>
+          <ToastContainer />
+          <AppChrome>{children}</AppChrome>
         </AppContextProvider>
       </body>
     </html>

@@ -40,7 +40,12 @@ const DoctorLogin = () => {
         // because they read the doctor from context, not from localStorage.
         setDocToken(res.token)
         toast.success('Login Successful')
-        router.push(res.profileCompleted ? '/' : '/doctor-dashboard/onboarding')
+        // Their own dashboard, not the patient-facing home page — a doctor signing in
+        // here is coming to work, and landing on the marketing site gave no indication
+        // the login had even succeeded.
+        router.push(
+            res.profileCompleted ? '/doctor-dashboard/dashboard' : '/doctor-dashboard/onboarding',
+        )
     }
 
     return (

@@ -1,12 +1,13 @@
 'use client'
 
-import React, { Suspense, useContext, useState } from 'react'
+import React, { Suspense, useContext, useEffect, useState } from 'react'
 import { AppContext } from '@/context/AppContext'
 import { loginUser, registerUser } from '@/app/actions/userActions'
 import { registerDoctor, loginDoctor } from '@/app/actions/doctorActions'
 import { toast } from 'react-toastify'
+import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Eye, EyeOff, Mail, Lock, User as UserIcon, Calendar, Droplet, Users, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, User as UserIcon, Calendar, Droplet, Users, Video, Bot, FileText } from 'lucide-react'
 import { GENDER_CHOICES, GENDER_UNSET } from '@/lib/profile'
 
 type AuthResponse = {
@@ -20,9 +21,19 @@ const LoginForm = () => {
     // The navbar links here as ?mode=login / ?mode=signup. Without this the page always
     // opened on Sign Up, so pressing "Login" landed people on a registration form.
     const searchParams = useSearchParams()
+    const mode = searchParams.get('mode')
     const [state, setState] = useState<'Sign Up' | 'Login'>(
-        searchParams.get('mode') === 'login' ? 'Login' : 'Sign Up',
+        mode === 'login' ? 'Login' : 'Sign Up',
     )
+
+    // `useState`'s initial value is only read on the first mount. Navigating from
+    // /login?mode=signup to /login?mode=login is the *same* route, so React reuses this
+    // component and the initializer never runs again — which is why the navbar's "Login"
+    // link changed the URL but left the form sitting on "Create an Account". Syncing on
+    // the param makes the link work from anywhere, including when already on this page.
+    useEffect(() => {
+        setState(mode === 'login' ? 'Login' : 'Sign Up')
+    }, [mode])
     const [role, setRole] = useState<'User' | 'Doctor'>('User')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
@@ -39,6 +50,16 @@ const LoginForm = () => {
     const router = useRouter()
 
     const [submitting, setSubmitting] = useState(false)
+
+    /**
+     * Switches between the Sign Up and Login forms by changing the URL, so the `?mode=`
+     * param stays the single source of truth. Setting local state alone would leave the
+     * URL stale, and the navbar's "Login" link would then appear dead whenever the URL
+     * already said `?mode=login`.
+     */
+    const switchMode = (next: 'Sign Up' | 'Login') => {
+        router.replace(next === 'Login' ? '/login?mode=login' : '/login?mode=signup')
+    }
 
     const onSubmitHandler = async (event: React.FormEvent) => {
         event.preventDefault()
@@ -90,15 +111,22 @@ const LoginForm = () => {
 
         if (role === 'User') {
             setToken(res.token)
-            router.push('/')
+            // Patients land on their appointments, which is what they came to manage —
+            // the marketing home page is the pre-login view and tells them nothing new.
+            router.push('/my-appointments')
             return
         }
 
         setDocToken(res.token)
         // A doctor who has not filled in their practice details yet cannot be found or
-        // booked, so send them straight to the onboarding form. Everyone else lands on
-        // the home page.
-        router.push(res.profileCompleted === false ? '/doctor-dashboard/onboarding' : '/')
+        // booked, so send them straight to the onboarding form. Otherwise their own
+        // dashboard — signing in as a doctor and landing on the patient-facing home page
+        // left them with no sign they were logged in as a doctor at all.
+        router.push(
+            res.profileCompleted === false
+                ? '/doctor-dashboard/onboarding'
+                : '/doctor-dashboard/dashboard',
+        )
     }
 
     // Simple password strength calculator
@@ -116,32 +144,49 @@ const LoginForm = () => {
     return (
         <div className="min-h-screen flex bg-blue-50">
             {/* Left Side: Illustration / Hero Area */}
-            <div className="hidden lg:flex w-1/2 relative bg-blue-600 flex-col justify-between overflow-hidden">
+            <div className="hidden lg:flex w-1/2 relative bg-blue-600 flex-col overflow-hidden">
                 <div 
                     className='absolute inset-0 z-0 opacity-20 bg-cover bg-center mix-blend-overlay'
                     style={{ backgroundImage: "url('/assets/header_img.png')" }}
                 ></div>
                 <div className="absolute inset-0 bg-gradient-to-b from-blue-600/80 to-blue-900/90 z-10"></div>
                 
-                <div className="relative z-20 p-12">
-                    <img src="/assets/logo.svg" alt="MediCare" className="w-40 brightness-0 invert mb-12" />
-                    <h1 className="text-4xl lg:text-5xl font-bold text-white leading-tight mb-6">
-                        Join the future of <br/> healthcare today.
-                    </h1>
-                    <p className="text-blue-100 text-lg max-w-md leading-relaxed">
-                        Create your account to unlock personalized AI health insights, seamless doctor consultations, and intelligent medical record management.
-                    </p>
-                </div>
+                {/* One centred column instead of `justify-between`: with the panel pinned
+                    to the viewport height, pushing the two blocks apart overflowed on
+                    shorter screens and silently clipped the feature list. */}
+                <div className="relative z-20 flex flex-col justify-center h-full p-10 xl:p-14">
+                    <Link href="/" className="inline-block mb-10 w-fit">
+                        <img src="/assets/logo.svg" alt="MediCare" className="w-36 brightness-0 invert" />
+                    </Link>
 
-                <div className="relative z-20 p-12 pb-20">
-                    <div className="flex items-center gap-4 bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20">
-                        <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center flex-shrink-0">
-                            <ShieldCheck className="text-blue-600 w-6 h-6" />
-                        </div>
-                        <div>
-                            <h3 className="text-white font-bold text-lg mb-1">Bank-level Security</h3>
-                            <p className="text-blue-200 text-sm">Your health data is encrypted and strictly confidential.</p>
-                        </div>
+                    <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight mb-5">
+                        Join the future of <br /> healthcare today.
+                    </h1>
+                    <p className="text-blue-100 text-base xl:text-lg max-w-md leading-relaxed mb-10">
+                        Book consultations, talk to your doctor over video, and keep every
+                        prescription in one place.
+                    </p>
+
+                    {/* Concrete capabilities rather than a security claim — the previous
+                        "Bank-level Security" badge asserted something the app cannot
+                        substantiate, which is not a promise a health product should make
+                        lightly. */}
+                    <div className="space-y-5">
+                        {[
+                            { icon: Video, title: 'Video consultations', copy: 'Talk to your doctor face to face, from anywhere.' },
+                            { icon: Bot, title: 'AI health assistant', copy: 'Answers grounded in your own records.' },
+                            { icon: FileText, title: 'Digital prescriptions', copy: 'Saved, searchable and downloadable.' },
+                        ].map((item) => (
+                            <div key={item.title} className="flex items-center gap-4">
+                                <div className="w-11 h-11 bg-white/15 rounded-xl flex items-center justify-center shrink-0 border border-white/20">
+                                    <item.icon className="text-white w-5 h-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-white font-semibold leading-snug">{item.title}</h3>
+                                    <p className="text-blue-200 text-sm leading-snug">{item.copy}</p>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -149,10 +194,11 @@ const LoginForm = () => {
             {/* Right Side: Form Area */}
             <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-12 relative">
                 
-                {/* Mobile Logo */}
-                <div className="absolute top-6 left-6 lg:hidden">
+                {/* Mobile logo — also the way back to the site, since this page renders
+                    without the navbar. */}
+                <Link href="/" className="absolute top-6 left-6 lg:hidden">
                     <img src="/assets/logo.svg" alt="MediCare" className="w-32" />
-                </div>
+                </Link>
 
                 <div className="w-full max-w-lg bg-white/80 backdrop-blur-xl border border-white rounded-3xl p-8 sm:p-10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] mt-12 lg:mt-0">
                     
@@ -350,21 +396,9 @@ const LoginForm = () => {
                                 : state === 'Sign Up' ? 'Create Account' : 'Sign In'}
                         </button>
 
-                        {state === 'Sign Up' && (
-                            <button
-                                type="button"
-                                className="w-full bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 font-semibold py-3.5 rounded-xl shadow-sm transition-all duration-300 flex items-center justify-center gap-3"
-                                onClick={() => toast.info("Google Sign Up is simulated for this UI design.")}
-                            >
-                                <svg width="20" height="20" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
-                                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
-                                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
-                                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
-                                </svg>
-                                Sign up with Google
-                            </button>
-                        )}
+                        {/* "Sign up with Google" lived here. It was a placeholder that only
+                            raised a toast saying it was simulated — a prominent button that
+                            did nothing. Removed until OAuth is actually wired up. */}
 
                         {state === 'Sign Up' && (
                             <p className="text-center text-xs text-gray-500 mt-2 px-4">
@@ -378,22 +412,24 @@ const LoginForm = () => {
                         {state === 'Sign Up' ? (
                             <p>
                                 Already have an account?{' '}
-                                <span
-                                    onClick={() => setState('Login')}
-                                    className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer transition-colors"
+                                <button
+                                    type="button"
+                                    onClick={() => switchMode('Login')}
+                                    className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer transition-colors font-medium"
                                 >
                                     Log in here
-                                </span>
+                                </button>
                             </p>
                         ) : (
                             <p>
-                                Don't have an account?{' '}
-                                <span
-                                    onClick={() => setState('Sign Up')}
-                                    className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer transition-colors"
+                                Don&apos;t have an account?{' '}
+                                <button
+                                    type="button"
+                                    onClick={() => switchMode('Sign Up')}
+                                    className="text-blue-600 hover:text-blue-700 hover:underline cursor-pointer transition-colors font-medium"
                                 >
                                     Create one here
-                                </span>
+                                </button>
                             </p>
                         )}
                     </div>
