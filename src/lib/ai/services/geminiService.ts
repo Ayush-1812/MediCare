@@ -262,10 +262,21 @@ export class GeminiService {
      * Never throws — returns a user-friendly error string on failure.
      */
     public async generateResponse(promptPackage: PromptPackage): Promise<string> {
+        // Prior turns, oldest first, so a follow-up like "what about the second one?" has
+        // something to resolve against. Without this each message was answered in
+        // isolation — the model had no memory of anything said earlier in the same chat.
+        const historyBlock =
+            promptPackage.history.length > 0
+                ? `### CONVERSATION SO FAR\n${promptPackage.history
+                      .map((turn) => `${turn.role === 'user' ? 'Patient' : 'Aether'}: ${turn.content}`)
+                      .join('\n')}\n\n`
+                : '';
+
         const prompt =
             `${promptPackage.systemPrompt}\n\n` +
             `${promptPackage.intentPrompts}\n\n` +
             `### PATIENT CONTEXT\n${JSON.stringify(promptPackage.context.data, null, 2)}\n\n` +
+            historyBlock +
             `### USER QUESTION\n${promptPackage.userQuestion}`;
 
         const promptSizeChars = prompt.length;
@@ -304,11 +315,19 @@ export class GeminiService {
                     const responseStream = await this.ai.models.generateContentStream({
                         model: GEMINI_MODEL,
                         contents: prompt,
-                        // Without passing the signal the AbortController below was inert:
-                        // a request that hung before the first chunk arrived was never
-                        // actually cancelled, and the timeout only took effect once the
-                        // stream started producing data.
-                        config: { abortSignal: controller.signal },
+                        config: {
+                            // Without passing the signal the AbortController below was
+                            // inert: a request that hung before the first chunk arrived
+                            // was never actually cancelled, and the timeout only took
+                            // effect once the stream started producing data.
+                            abortSignal: controller.signal,
+                            // This is grounded question-answering over a patient's real
+                            // record, not creative writing — the default temperature left
+                            // answers to the same factual question inconsistent between
+                            // askings. Low, not zero: some phrasing variation is fine, but
+                            // never at the cost of the CRITICAL RULES being applied loosely.
+                            temperature: 0.3,
+                        },
                     });
 
                     for await (const chunk of responseStream) {
