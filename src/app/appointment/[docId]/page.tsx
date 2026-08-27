@@ -4,6 +4,8 @@ import React, { useContext, useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { AppContext } from '@/context/AppContext'
 import { bookAppointment } from '@/app/actions/userActions'
+import { createPaymentOrder, verifyPayment } from '@/app/actions/paymentActions'
+import { openRazorpayCheckout } from '@/lib/payment/razorpayCheckout'
 import { toast } from 'react-toastify'
 import RelatedDoctors from '@/components/RelatedDoctors'
 import { formatINR } from '@/lib/currency'
@@ -27,16 +29,19 @@ import {
     Award,
     Video,
     Star,
+    CreditCard,
+    Banknote,
 } from 'lucide-react'
 
 const Appointment = () => {
     const { docId } = useParams<{ docId: string }>()
-    const { doctors, token, getDoctorsData } = useContext(AppContext)
+    const { doctors, token, userData, getDoctorsData } = useContext(AppContext)
     const router = useRouter()
 
     const [slotIndex, setSlotIndex] = useState(0)
     const [slotTime, setSlotTime] = useState('')
     const [booking, setBooking] = useState(false)
+    const [payOnline, setPayOnline] = useState(true)
 
     const docInfo = useMemo(
         () => doctors.find((doc: any) => doc.id === docId) ?? null,
@@ -87,16 +92,74 @@ const Appointment = () => {
         setBooking(true)
         try {
             const res = await bookAppointment(docId, formatSlotDateKey(slot.datetime), slot.time)
-            if (res.success) {
-                toast.success(res.message)
-                // Refresh so the slot we just took disappears for everyone.
-                await getDoctorsData()
-                router.push('/my-appointments')
-            } else {
+            if (!res.success) {
                 toast.error(res.message)
+                return
             }
+
+            // The slot is taken either way — refresh so it disappears for everyone,
+            // regardless of which payment path runs next.
+            await getDoctorsData()
+
+            // Pay at Clinic needs nothing further: the appointment already exists with
+            // `payment: false`, exactly as it always has.
+            if (!payOnline || res.amount <= 0) {
+                toast.success(res.message)
+                router.push('/my-appointments')
+                return
+            }
+
+            await payForAppointment(res.appointmentId)
         } finally {
             setBooking(false)
+        }
+    }
+
+    /**
+     * Opens Razorpay checkout for an appointment that already exists. Used both right
+     * after booking (Pay Online) and later from "Pay Now" if the popup was dismissed —
+     * the appointment is never blocked on payment succeeding, since closing the Razorpay
+     * window must not lose a slot the patient already holds.
+     */
+    const payForAppointment = async (appointmentId: string) => {
+        const order = await createPaymentOrder(appointmentId)
+        if (!order.success) {
+            toast.error(order.message)
+            toast.info('You can complete payment any time from My Appointments.')
+            router.push('/my-appointments')
+            return
+        }
+
+        try {
+            await openRazorpayCheckout({
+                keyId: order.keyId,
+                orderId: order.orderId,
+                amount: order.amount,
+                currency: order.currency,
+                patientName: userData?.name,
+                patientEmail: userData?.email,
+                patientPhone: userData?.phone,
+                onSuccess: async (response) => {
+                    const result = await verifyPayment(
+                        appointmentId,
+                        response.razorpay_order_id,
+                        response.razorpay_payment_id,
+                        response.razorpay_signature,
+                    )
+                    if (result.success) toast.success('Payment successful — appointment confirmed')
+                    else toast.error(result.message)
+                    router.push('/my-appointments')
+                },
+                onDismiss: () => {
+                    toast.info('Booking saved. You can pay any time from My Appointments.')
+                    router.push('/my-appointments')
+                },
+            })
+        } catch {
+            // checkout.js failed to load — a blocked script or dead network, not a
+            // payment failure. The appointment already exists, so this is not fatal.
+            toast.error('Could not open the payment window. You can pay from My Appointments.')
+            router.push('/my-appointments')
         }
     }
 
@@ -298,12 +361,43 @@ const Appointment = () => {
                             </div>
                         )}
 
+                        {docInfo.fees > 0 && (
+                            <div className='flex items-center gap-2 mt-6'>
+                                <button
+                                    type='button'
+                                    onClick={() => setPayOnline(true)}
+                                    className={`flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-full border transition-colors ${
+                                        payOnline
+                                            ? 'bg-primary text-white border-primary'
+                                            : 'text-gray-500 border-gray-300 hover:border-primary'
+                                    }`}
+                                >
+                                    <CreditCard className='w-3.5 h-3.5' /> Pay Online
+                                </button>
+                                <button
+                                    type='button'
+                                    onClick={() => setPayOnline(false)}
+                                    className={`flex items-center gap-1.5 text-xs font-semibold px-3.5 py-2 rounded-full border transition-colors ${
+                                        !payOnline
+                                            ? 'bg-primary text-white border-primary'
+                                            : 'text-gray-500 border-gray-300 hover:border-primary'
+                                    }`}
+                                >
+                                    <Banknote className='w-3.5 h-3.5' /> Pay at Clinic
+                                </button>
+                            </div>
+                        )}
+
                         <button
                             onClick={handleBookAppointment}
                             disabled={booking || !slotTime}
-                            className='bg-primary disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-light px-14 py-3 rounded-full mt-6 transition-colors'
+                            className='bg-primary disabled:bg-gray-300 disabled:cursor-not-allowed text-white text-sm font-light px-14 py-3 rounded-full mt-4 transition-colors'
                         >
-                            {booking ? 'Booking...' : 'Book an appointment'}
+                            {booking
+                                ? 'Booking...'
+                                : payOnline && docInfo.fees > 0
+                                  ? 'Book & Pay Online'
+                                  : 'Book an appointment'}
                         </button>
                     </>
                 )}

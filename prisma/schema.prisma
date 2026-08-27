@@ -107,7 +107,13 @@ model Appointment {
   duration     Int?
   diagnosis    String?
   prescription String?
+  // The doctor's own private notes — never sent to the patient. See
+  // `getConsultationDetails`, which nulls this out for anyone but the doctor.
   notes        String?
+  // The patient's personal notes from the consultation, written during or after the
+  // call. Kept separate from `notes` precisely because that one is doctor-only: the two
+  // are different people's private writing about the same appointment.
+  patientNotes String?
   followUpDate DateTime?
 }
 

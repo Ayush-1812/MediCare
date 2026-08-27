@@ -1,5 +1,5 @@
 import { ContextObject } from '../contextBuilder/types';
-import { PromptPackage } from './types';
+import { ConversationTurn, PromptPackage } from './types';
 import { systemPrompt } from '../prompts/system';
 import { appointmentPrompt } from '../prompts/appointment';
 import { prescriptionPrompt } from '../prompts/prescription';
@@ -16,7 +16,12 @@ export class PromptManager {
     private static promptRegistry: Record<string, string> = {
         appointment: appointmentPrompt,
         prescription: prescriptionPrompt,
-        report: reportPrompt,
+        // Must match Intent.MEDICAL_REPORT ('medical_report'), not the tool's old 'report'
+        // key — the mismatch meant this prompt was silently never selected, and every
+        // report-related question fell back to the generic "general healthcare inquiry"
+        // prompt with none of this file's guidance about explaining results in plain
+        // language or deferring the actual assessment to a doctor.
+        medical_report: reportPrompt,
         profile: profilePrompt,
         timeline: timelinePrompt,
         health_summary: healthSummaryPrompt,
@@ -37,8 +42,13 @@ export class PromptManager {
      * Builds a provider-independent PromptPackage containing the global system prompt,
      * combined intent prompts, cleaned context, and the user's question.
      */
-    public static buildPrompt(userQuestion: string, intents: string[], context: ContextObject): PromptPackage {
-        
+    public static buildPrompt(
+        userQuestion: string,
+        intents: string[],
+        context: ContextObject,
+        history: ConversationTurn[] = []
+    ): PromptPackage {
+
         // Collect specific prompts for the detected intents
         const specificPrompts = intents
             .map(intent => this.promptRegistry[intent])
@@ -53,7 +63,8 @@ export class PromptManager {
             systemPrompt: systemPrompt,
             intentPrompts: combinedIntentPrompts,
             context: context,
-            userQuestion: userQuestion
+            userQuestion: userQuestion,
+            history: history
         };
     }
 }
