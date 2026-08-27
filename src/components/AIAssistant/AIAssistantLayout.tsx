@@ -34,7 +34,11 @@ const AIAssistantLayout: React.FC = () => {
   };
 
   return (
-    <div className="bg-slate-50 sm:p-6 lg:p-8 flex justify-center font-sans">
+    // The root layout wraps every page in `mx-4 sm:mx-[10%]`, which caps this panel at
+    // 80% of the viewport no matter how wide it is allowed to grow. Negative margins
+    // cancel exactly that gutter so the assistant can use the full screen — a chat needs
+    // the width far more than a marketing page does.
+    <div className="bg-slate-50 sm:p-6 lg:p-8 flex justify-center font-sans -mx-4 sm:-mx-[11.111%]">
 
       {/* Mobile drawer + backdrop live outside the panel below: a `backdrop-filter` or
           `transform` ancestor becomes the containing block for `position: fixed`
@@ -69,7 +73,9 @@ const AIAssistantLayout: React.FC = () => {
         </div>
       </div>
 
-      <div className="w-full max-w-6xl h-dvh sm:h-[85vh] bg-white sm:rounded-2xl border border-slate-200 sm:shadow-sm overflow-hidden flex">
+      {/* Wider and taller than before: a medical conversation runs long, and the extra
+          room means noticeably fewer messages scroll out of view mid-answer. */}
+      <div className="w-full max-w-[1400px] h-dvh sm:h-[92vh] bg-white sm:rounded-2xl border border-slate-200 sm:shadow-sm overflow-hidden flex">
 
         {/* Conversation list */}
         <div className="hidden lg:flex w-70 shrink-0 border-r border-slate-200 flex-col bg-slate-50/60">

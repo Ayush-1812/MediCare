@@ -62,7 +62,17 @@ export async function GET(request: Request) {
             throw new Error("SERPAPI_KEY missing");
         }
 
-        const url = `https://serpapi.com/search.json?engine=google_maps&q=Pharmacy&ll=@${lat},${lng},14z&api_key=${apiKey}`;
+        // The `z` value is Google Maps' zoom level, and it controls how wide an area the
+        // search covers. At the previous `14z` the results spanned roughly 8km with a
+        // median around 5km — technically "nearby" but useless to someone who wants a
+        // pharmacy they can walk or drive to now. Measured against a fixed origin:
+        //
+        //   14z -> nearest 1.11km, median 5.16km, farthest 8.23km
+        //   15z -> nearest 1.11km, median 2.74km, farthest 4.17km
+        //   16z -> nearest 0.00km, median 1.28km, farthest 2.44km
+        //
+        // 16z still returns a full 20 results, so tightening costs no coverage here.
+        const url = `https://serpapi.com/search.json?engine=google_maps&q=Pharmacy&ll=@${lat},${lng},16z&api_key=${apiKey}`;
 
         const response = await fetch(url, { cache: "no-store" });
         const data = await response.json();
