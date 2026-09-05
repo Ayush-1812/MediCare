@@ -4,7 +4,7 @@ A full-stack healthcare platform where patients book doctors, consult over peer-
 
 Built with **Next.js 16**, **React 19**, **TypeScript**, **PostgreSQL/Prisma**, **WebRTC**, and the **Google Gemini API**.
 
----
+
 
 ## 📋 Table of Contents
 
