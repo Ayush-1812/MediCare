@@ -17,8 +17,10 @@ const { createServer } = require('http')
 const { parse } = require('url')
 const next = require('next')
 const { Server } = require('socket.io')
-const jwt = require('jsonwebtoken')
+const crypto = require('crypto')
 const { PrismaClient } = require('@prisma/client')
+const { parseCookies, sessionId, USER_COOKIE, DOCTOR_COOKIE } = require('./server/lib/session')
+const { attachVoiceGateway } = require('./server/voice/gateway')
 
 const dev = process.env.NODE_ENV !== 'production'
 const hostname = process.env.HOSTNAME || '0.0.0.0'
@@ -28,34 +30,24 @@ const app = next({ dev, hostname, port })
 const handle = app.getRequestHandler()
 const prisma = new PrismaClient()
 
-// Mirrors src/lib/auth.ts — keep these in step with it.
-const USER_COOKIE = 'token'
-const DOCTOR_COOKIE = 'docToken'
+// Cookie parsing and JWT verification moved to ./server/lib/session.js, which mirrors
+// src/lib/auth.ts. The voice gateway needs exactly the same checks, and one mirror of
+// lib/auth.ts is better than two.
 
-/** Minimal cookie-header parser; the handshake gives us a raw header, not a cookie jar. */
-function parseCookies(header) {
-    const jar = {}
-    for (const part of (header || '').split(';')) {
-        const index = part.indexOf('=')
-        if (index === -1) continue
-        jar[part.slice(0, index).trim()] = decodeURIComponent(part.slice(index + 1).trim())
-    }
-    return jar
-}
-
-/** Verifies one role's cookie and returns its subject id, or null. */
-function sessionId(jar, cookieName, role) {
-    const token = jar[cookieName]
-    if (!token) return null
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET)
-        // The role claim is checked as well as the signature: every cookie is signed with
-        // the same secret, so without it a patient token pasted into `docToken` would pass.
-        return decoded && decoded.role === role && decoded.id ? decoded.id : null
-    } catch {
-        return null
-    }
-}
+/**
+ * Shared secret proving an internal request came from this process.
+ *
+ * The voice gateway cannot call server actions directly — they resolve identity through
+ * `cookies()` and need a Next request scope — so it posts to internal API routes instead.
+ * Because Next is embedded in this very process, both sides read the same value from
+ * `process.env` and it never leaves the process or reaches a browser. Generated per boot:
+ * nothing persists it, so there is nothing to leak or rotate.
+ *
+ * Set before `app.prepare()` so the value is in place no matter when the first request
+ * arrives.
+ */
+process.env.VOICE_INTERNAL_SECRET =
+    process.env.VOICE_INTERNAL_SECRET || crypto.randomBytes(32).toString('hex')
 
 /**
  * Decides whether this socket may join this appointment's room.
@@ -87,7 +79,14 @@ async function authorize(handshake) {
     const isPatient = Boolean(userId) && appointment.userId === userId
     if (!isDoctor && !isPatient) return { error: 'You are not part of this consultation' }
 
-    return { appointmentId, role: isDoctor ? 'doctor' : 'patient' }
+    // `identityId` is carried so the connection handler can tag the socket with who owns
+    // it. The voice gateway reads that tag to refuse opening a microphone while this same
+    // person is sitting in a consultation — two things cannot own the mic at once.
+    return {
+        appointmentId,
+        role: isDoctor ? 'doctor' : 'patient',
+        identityId: isDoctor ? doctorId : userId,
+    }
 }
 
 app.prepare().then(async () => {
@@ -132,6 +131,7 @@ app.prepare().then(async () => {
             if (result.error) return nextFn(new Error(result.error))
             socket.data.appointmentId = result.appointmentId
             socket.data.role = result.role
+            socket.data.userId = result.identityId
             nextFn()
         } catch (error) {
             console.error('[signaling] authorization threw:', error)
@@ -192,6 +192,18 @@ app.prepare().then(async () => {
             socket.to(room).emit('peer-left', { role })
             console.log(`[signaling] ${role} left ${room}`)
         })
+    })
+
+    // The voice receptionist takes its own namespace on this same Socket.IO server, so it
+    // inherits the transport, the Redis adapter when one is configured, and the payload
+    // cap above. It disables itself with a warning if GEMINI_API_KEY is absent rather than
+    // preventing the app from booting.
+    attachVoiceGateway(io, {
+        // Loopback: the gateway and Next are the same process, so this never leaves the
+        // machine. 127.0.0.1 rather than `hostname`, which is 0.0.0.0 by default and is a
+        // bind address, not a dialable one.
+        baseUrl: `http://127.0.0.1:${port}`,
+        internalSecret: process.env.VOICE_INTERNAL_SECRET,
     })
 
     server.listen(port, hostname, () => {
