@@ -720,7 +720,7 @@ The parser is deterministic, free, and instant — it handles 80% of cases corre
 | `server.js` | Custom Node server: Next.js + Socket.IO signaling |
 | `prisma/schema.prisma` | All database models |
 | `src/lib/auth.ts` | JWT session management |
-| `src/middleware.ts` | Route protection |
+| `src/proxy.ts` | Route protection |
 | `src/lib/webrtc/useWebRTCCall.ts` | WebRTC peer connection hook |
 | `src/lib/ai/AIOrchestrator.ts` | AI pipeline coordinator |
 | `src/lib/ai/IntentRouter.ts` | Keyword-based intent classification |

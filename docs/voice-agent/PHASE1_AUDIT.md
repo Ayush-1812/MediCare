@@ -15,7 +15,7 @@
 | Data layer | PostgreSQL via Prisma **5.22**, **6 models** (`User`, `Doctor`, `Appointment`, `Prescription`, `Conversation`, `Message`) | `prisma/schema.prisma` |
 | Business logic | **39 server actions** across 7 files + **6 API route handlers** | `src/app/actions/`, `src/app/api/` |
 | Auth | JWT in **httpOnly cookies**, 3 separate cookies (`token` / `docToken` / `adminToken`), `role` claim verified alongside signature, 7-day expiry | `src/lib/auth.ts` |
-| Authorization | 2 layers — Edge middleware (presence check only, cannot verify signature on Edge) + per-action verification | `src/middleware.ts:30`, `src/lib/auth.ts:62` |
+| Authorization | 2 layers — Edge middleware (presence check only, cannot verify signature on Edge) + per-action verification | `src/proxy.ts:30`, `src/lib/auth.ts:62` |
 | AI layer | `AIOrchestrator` → `IntentRouter` → `ToolRegistry` (**7 tools**) → `ContextBuilder` → `PromptManager` → `GeminiService` | `src/lib/ai/` (~1,968 LOC) |
 | LLM | `gemini-2.5-flash` via `@google/genai@2.10.0`; streaming + `responseSchema` structured output already in use | `src/lib/ai/config/geminiConfig.ts`, `services/geminiService.ts` |
 | Realtime | WebRTC P2P, perfect-negotiation, JWT-authorized handshake, Redis pub/sub adapter (optional) | `server.js:66`, `src/lib/webrtc/useWebRTCCall.ts` |

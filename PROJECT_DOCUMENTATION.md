@@ -122,7 +122,7 @@ User submits login form
 - **Registration:** [`src/app/actions/userActions.ts`](./src/app/actions/userActions.ts) — `registerUser()` hashes the password with `bcrypt.genSalt(10)` + `bcrypt.hash()`, creates the user in PostgreSQL, signs a JWT, and sets it as an HTTP-only cookie.
 - **Login:** `loginUser()` retrieves the user by email, compares passwords, and issues a new JWT.
 - **Doctor Login:** [`src/app/actions/doctorActions.ts`](./src/app/actions/doctorActions.ts) — `loginDoctor()` issues a `docToken` cookie, distinct from the patient `token`.
-- **Middleware:** [`src/middleware.ts`](./src/middleware.ts) — runs on every request before page rendering. Checks for the presence of any of the three tokens (`token`, `docToken`, `adminToken`). Public routes bypass authentication.
+- **Middleware:** [`src/proxy.ts`](./src/proxy.ts) — runs on every request before page rendering. Checks for the presence of any of the three tokens (`token`, `docToken`, `adminToken`). Public routes bypass authentication.
 
 ### Technologies Used
 - `jsonwebtoken` — JWT signing and verification
@@ -570,7 +570,7 @@ medicare--/                         # Project root
 │
 ├── src/
 │   │
-│   ├── middleware.ts                # JWT route guard (runs at Edge before every request)
+│   ├── proxy.ts                     # JWT route guard (runs at Edge before every request)
 │   │
 │   ├── context/
 │   │   └── AppContext.tsx           # Global React context: token, docToken, userData, doctors[]
@@ -1422,7 +1422,7 @@ User ─────────────────────────
 │                  Protected Routes                        │
 │                                                          │
 │  Browser navigates to /my-appointments                  │
-│    → middleware.ts runs at Edge                         │
+│    → proxy.ts runs at Edge                         │
 │    → Checks: token || docToken || adminToken in cookie  │
 │    → If none found: redirect to /login                  │
 │    → If found: NextResponse.next() — allow request      │
@@ -2324,7 +2324,7 @@ Server Actions are used for form-like data mutations: register, login, book appo
 **Q5: Explain the App Router file-based routing in this project.**
 Every folder in `src/app/` becomes a route segment. `page.tsx` is the route component. `[dynamicParam]` in brackets is a dynamic route. For example, `src/app/appointment/[docId]/page.tsx` handles `/appointment/abc123`. `layout.tsx` wraps all child routes — the root layout in `src/app/layout.tsx` adds Navbar, Footer, and AppContextProvider around every page.
 
-**Q6: What is the purpose of `middleware.ts` and where does it run?**
+**Q6: What is the purpose of `proxy.ts` and where does it run?**
 The middleware runs at the "Edge" — before the request reaches Next.js page rendering or API routes. It intercepts every incoming request matching the `matcher` pattern. It checks cookies for any valid token and redirects to `/login` if none is found. Running at the Edge means it executes in a V8 isolate (not Node.js) for lower latency, but it has limited APIs — no Prisma, no database access.
 
 **Q7: How do you handle hot-reload issues with Prisma in Next.js development?**
