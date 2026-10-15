@@ -140,13 +140,19 @@ async function main() {
     const only = process.argv.slice(2)
     const targets = only.length > 0 ? TARGETS.filter((t) => only.includes(t.code)) : TARGETS
 
-    // Preserve languages we are not regenerating, so a single-language run is not a
-    // destructive rewrite of the whole file.
+    /**
+     * Existing catalogs, kept so nothing is lost by a run that does not cover everything.
+     *
+     * Read for EVERY language, not only the ones being skipped. The provider returns a
+     * transient 503 often enough that it happened on the first full run of this script,
+     * and the earlier version — which only preserved on single-language runs — silently
+     * dropped a complete, good Punjabi catalog because that one request failed. A
+     * translation file is not worth regenerating if regenerating it can destroy data.
+     */
     const existing = {}
-    if (fs.existsSync(OUTPUT) && only.length > 0) {
+    if (fs.existsSync(OUTPUT)) {
         const text = fs.readFileSync(OUTPUT, 'utf8')
         for (const t of TARGETS) {
-            if (only.includes(t.code)) continue
             const block = new RegExp(`'${t.code}': \\{([\\s\\S]*?)\\n {4}\\}`, 'm').exec(text)
             if (block) existing[t.code] = block[1]
         }

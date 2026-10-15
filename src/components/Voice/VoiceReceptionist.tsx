@@ -21,6 +21,7 @@ import { SUPPORTED_LANGUAGES, type LanguageCode } from '@/lib/voice/config'
 import { localizationCoverage } from '@/lib/voice/i18n'
 import type { VoiceState } from '@/lib/voice/protocol'
 import type { MessageKey } from '@/lib/voice/messages'
+import VoiceCards from './VoiceCards'
 import {
     AlertCircle,
     Languages,
@@ -86,6 +87,11 @@ const VoiceReceptionist = () => {
         muted,
         language,
         t,
+        cards,
+        pending,
+        locationState,
+        decide,
+        requestLocation,
         suggestion,
         acceptSuggestion,
         dismissSuggestion,
@@ -251,6 +257,7 @@ const VoiceReceptionist = () => {
                             {live ? t('empty_live') : t('empty_idle')}
                         </p>
                         <p className="mt-2 text-xs text-gray-400">{t('empty_hint')}</p>
+                        <p className="mt-2 text-xs text-gray-400">{t('privacy_note')}</p>
                     </div>
                 )}
 
@@ -270,6 +277,17 @@ const VoiceReceptionist = () => {
                         </p>
                     </div>
                 ))}
+
+                {(cards.length > 0 || pending?.state === 'awaiting') && (
+                    <VoiceCards
+                        cards={cards}
+                        pending={pending}
+                        t={t}
+                        onDecide={decide}
+                        onRequestLocation={requestLocation}
+                        locationState={locationState}
+                    />
+                )}
 
                 {state === 'thinking' && activity && (
                     <p className="px-1 text-xs italic text-gray-400">{activity}</p>

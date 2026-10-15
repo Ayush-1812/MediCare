@@ -43,6 +43,10 @@ export type VoiceErrorCode =
 export const ClientEvent = {
     /** Open a Live session. Sent once after the socket connects. */
     Start: 'voice:start',
+    /** Coordinates, sent only after the patient grants browser location permission. */
+    Location: 'voice:location',
+    /** Confirm or reject the pending action using the card's buttons. */
+    Decide: 'voice:decide',
     /** One frame of captured PCM16 @16 kHz, mono. Binary payload. */
     Audio: 'voice:audio',
     /** Mic closed or muted — tells the provider the user's turn is over. */
@@ -92,7 +96,43 @@ export const ServerEvent = {
     /** Provider is about to drop the connection; gateway will resume transparently. */
     Reconnecting: 'voice:reconnecting',
     Error: 'voice:error',
+    /** Structured data for the panel to render alongside the spoken answer. */
+    Ui: 'voice:ui',
+    /** Lifecycle of a consequential action awaiting (or past) confirmation. */
+    Pending: 'voice:pending',
 } as const
+
+export type LocationPayload = { lat: number; lng: number }
+export type DecidePayload = { approved: boolean }
+
+/**
+ * Renderable tool output.
+ *
+ * Kept separate from the text the model receives: the spoken copy is shaped for listening
+ * ("three slots, which works best?") while the panel wants fields it can lay out. Having
+ * the UI parse the spoken sentence instead would break the moment the phrasing changed, or
+ * the language did.
+ */
+export type UiPayload =
+    // Labels travel as catalog keys, not text, so a confirmation card reads in the
+    // patient's own language. Values are real backend data and are shown verbatim.
+    | { kind: 'confirm'; action: string; titleKey: string; lines: { labelKey: string; value: string }[]; turnId?: number }
+    | { kind: 'doctor'; id: string; name: string; speciality?: string | null; fee?: number | null; city?: string | null; hospital?: string | null; turnId?: number }
+    | { kind: 'doctors'; doctors: { id: string; name: string; speciality?: string | null; fee?: number | null }[]; turnId?: number }
+    | { kind: 'slots'; doctorId: string; doctorName: string; slotDateKey: string; date: string; times: string[]; turnId?: number }
+    | { kind: 'appointments'; appointments: { id: string; doctor: string; when: string; status: string; canJoinNow?: boolean }[]; turnId?: number }
+    | { kind: 'pharmacies'; pharmacies: Record<string, unknown>[]; turnId?: number }
+    | { kind: 'location_consent'; turnId?: number }
+
+/** `awaiting` → the confirmation card is live; everything else closes it. */
+export type PendingPayload = {
+    state: 'awaiting' | 'done' | 'failed' | 'cancelled' | 'invalid' | 'unknown'
+    action?: string
+    summary?: string
+    expiresInMs?: number
+    reason?: string
+    replayed?: boolean
+}
 
 export type ReadyPayload = {
     sessionId: string
