@@ -8,7 +8,9 @@
     "start": "node server.js",
     "lint": "eslint",
     "postinstall": "prisma generate",
-    "dev:next": "next dev"
+    "dev:next": "next dev",
+    "verify:voice": "node scripts/verify-voice.js",
+    "verify:voice:audio": "node scripts/verify-voice-audio.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",
