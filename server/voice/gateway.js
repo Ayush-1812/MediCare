@@ -21,11 +21,26 @@
 
 const { GoogleGenAI } = require('@google/genai')
 const { parseCookies, sessionId, USER_COOKIE } = require('../lib/session')
+const { PendingActionStore } = require('./pendingActions')
+
+/** Shared across sessions; keyed internally by user and socket. */
+const pendingActions = new PendingActionStore()
+
+/**
+ * Tools the gateway answers itself, because they operate on the pending-action store,
+ * which lives with the session rather than in Next. Mirrors `GATEWAY_TOOLS` in
+ * `src/lib/voice/tools/definitions.ts`.
+ */
+const GATEWAY_TOOLS = new Set(['confirm_action', 'cancel_pending_action'])
 
 const VOICE_NAMESPACE = '/voice'
 
 const ClientEvent = {
     Start: 'voice:start',
+    /** Coordinates the patient granted via the panel's location button. */
+    Location: 'voice:location',
+    /** Confirm or reject the pending action from the UI card rather than by speaking. */
+    Decide: 'voice:decide',
     Audio: 'voice:audio',
     AudioEnd: 'voice:audio-end',
     Text: 'voice:text',
@@ -44,6 +59,10 @@ const ServerEvent = {
     TurnComplete: 'voice:turn-complete',
     Reconnecting: 'voice:reconnecting',
     Error: 'voice:error',
+    /** Structured data for the panel to render (doctor cards, slots, confirm card). */
+    Ui: 'voice:ui',
+    /** A proposal is awaiting confirmation, or has been resolved. */
+    Pending: 'voice:pending',
 }
 
 const AUDIO_HEADER_BYTES = 8
@@ -118,6 +137,13 @@ class VoiceSession {
 
         /** Tool calls still in flight, by provider call id, so they can be cancelled. */
         this.pendingTools = new Map()
+
+        /**
+         * Coordinates from the browser, set only after the patient granted permission.
+         * Injected into the pharmacy tool's arguments so the model never supplies a
+         * location — a guessed latitude returns confidently wrong pharmacies.
+         */
+        this.coords = null
 
         /**
          * Results of completed mutating tool calls, keyed by idempotency key. A session
@@ -465,7 +491,15 @@ class VoiceSession {
 
         this.socket.emit(ServerEvent.Tool, { name, status: 'running', label, turnId })
 
-        const response = await this.fetchJson('/api/voice/tool', { name, args })
+        // Location is attached here rather than accepted from the model. The tool's
+        // declared schema has no coordinate fields at all, so this is the only way a
+        // position can reach it, and it exists only once the patient has consented.
+        const toolArgs =
+            name === 'find_nearby_pharmacies' ? { ...args, __coords: this.coords } : args
+
+        const response = GATEWAY_TOOLS.has(name)
+            ? await this.handleGatewayTool(name, args)
+            : await this.fetchJson('/api/voice/tool', { name, args: toolArgs })
 
         // Three ways this result can be void by the time it lands: the provider cancelled
         // the call, the user interrupted (bumping turnId), or the session ended. In all
@@ -484,6 +518,23 @@ class VoiceSession {
             label,
             turnId,
         })
+
+        // A proposal came back. Stored server-side, keyed to this user and socket, so the
+        // confirmation that follows commits these exact parameters and not whatever the
+        // model happens to pass later.
+        if (ok && response.pendingAction) {
+            const record = pendingActions.propose(this.userId, this.socket.id, response.pendingAction)
+            this.socket.emit(ServerEvent.Pending, {
+                state: 'awaiting',
+                action: record.action,
+                summary: record.summary,
+                expiresInMs: record.expiresAt - Date.now(),
+            })
+        }
+
+        if (ok && response.uiPayload) {
+            this.socket.emit(ServerEvent.Ui, { ...response.uiPayload, turnId })
+        }
 
         // A client-side effect (currently only navigation) rides back on the same event
         // stream, so the page moves as the assistant says it is moving.
@@ -516,6 +567,97 @@ class VoiceSession {
         } catch (error) {
             console.error('[voice] sendToolResponse failed:', error)
         }
+    }
+
+    /**
+     * Tools the gateway answers itself.
+     *
+     * `confirm_action` is the only path to a mutation, and the parameters it commits come
+     * from the pending-action store — never from the model's arguments. The model may name
+     * which action it believes it is confirming, and that is checked against the stored
+     * record, but it cannot supply a doctor, a date or a time here. If the conversation and
+     * the store have diverged, the commit is refused and the agent is told to propose
+     * again rather than guess which one the patient meant.
+     */
+    async handleGatewayTool(name, args) {
+        if (name === 'cancel_pending_action') {
+            const had = pendingActions.invalidate(this.userId, this.socket.id)
+            this.socket.emit(ServerEvent.Pending, { state: 'cancelled' })
+            return {
+                ok: true,
+                data: had
+                    ? { cancelled: true, note: 'The proposal was discarded. Nothing was changed.' }
+                    : { cancelled: false, note: 'There was nothing pending.' },
+            }
+        }
+
+        // confirm_action
+        const claim = pendingActions.claim(this.userId, this.socket.id, {
+            action: typeof args.action === 'string' ? args.action : undefined,
+        })
+
+        if (!claim.ok) {
+            this.socket.emit(ServerEvent.Pending, { state: 'invalid', reason: claim.reason })
+            const explanation = {
+                none:
+                    'There is nothing pending to confirm. Nothing has been changed. Propose the ' +
+                    'action again before confirming.',
+                expired:
+                    'That proposal expired because too long passed. Nothing has been changed. ' +
+                    'Tell the patient you will set it up again, re-check availability, and propose ' +
+                    'afresh.',
+                mismatch:
+                    'That does not match what is pending, so nothing has been changed. Do not ' +
+                    'guess — propose the action again with the details the patient just gave.',
+            }
+            return {
+                ok: false,
+                data: { committed: false, reason: claim.reason, error: explanation[claim.reason] },
+            }
+        }
+
+        const record = claim.record
+
+        // A completed action replayed instead of re-executed. This is what makes a
+        // reconnection safe: the same idempotency key returns the original outcome rather
+        // than booking a second appointment.
+        const earlier = pendingActions.resultFor(record.idempotencyKey)
+        if (earlier) {
+            this.socket.emit(ServerEvent.Pending, { state: 'done', replayed: true })
+            return earlier
+        }
+
+        const response = await this.fetchJson('/api/voice/commit', {
+            action: record.action,
+            params: record.params,
+        })
+
+        if (!response) {
+            // Transport died with the write in flight. Its outcome is genuinely unknown,
+            // so it is recorded as such and NOT retried — the agent is instructed to read
+            // the real state back instead.
+            const unknown = {
+                ok: false,
+                data: {
+                    committed: false,
+                    outcomeUnknown: true,
+                    error:
+                        'The connection dropped while that was being saved, so it is unclear ' +
+                        'whether it went through. Tell the patient you are checking, then read ' +
+                        'their appointments back. Do not try the change again.',
+                },
+            }
+            pendingActions.recordResult(record.idempotencyKey, unknown)
+            this.socket.emit(ServerEvent.Pending, { state: 'unknown' })
+            return unknown
+        }
+
+        pendingActions.recordResult(record.idempotencyKey, response)
+        this.socket.emit(ServerEvent.Pending, {
+            state: response.ok ? 'done' : 'failed',
+            action: record.action,
+        })
+        return response
     }
 
     /**
@@ -596,6 +738,39 @@ class VoiceSession {
         } catch (error) {
             console.error('[voice] sendClientContent failed:', error)
             this.handleDrop('provider_error', error)
+        }
+    }
+
+    /**
+     * Resolves the pending action from the UI buttons.
+     *
+     * Runs the identical store claim and commit path a spoken confirmation takes, then
+     * tells the model what happened as a user turn so it can narrate the real outcome.
+     * The alternative — having the button call the backend directly and leaving the model
+     * to find out later — produces an assistant that cheerfully asks for a confirmation
+     * that already happened.
+     */
+    async decidePending(approved) {
+        if (this.closed) return
+
+        const result = await this.handleGatewayTool(
+            approved ? 'confirm_action' : 'cancel_pending_action',
+            {},
+        )
+
+        if (!this.live) return
+        const note = approved
+            ? `[The patient pressed Confirm. Result: ${JSON.stringify(result.data)}. Tell them what actually happened, and nothing more.]`
+            : '[The patient pressed Cancel. Nothing was changed. Acknowledge briefly and ask what they would like instead.]'
+
+        try {
+            this.live.sendClientContent({
+                turns: [{ role: 'user', parts: [{ text: note }] }],
+                turnComplete: true,
+            })
+            this.setState('thinking')
+        } catch (error) {
+            console.error('[voice] decide relay failed:', error)
         }
     }
 
@@ -771,8 +946,36 @@ function attachVoiceGateway(io, options) {
             const language = payload && payload.language
             if (language) session.changeLanguage(language).catch(() => {})
         })
+        socket.on(ClientEvent.Location, (payload) => {
+            const lat = Number(payload && payload.lat)
+            const lng = Number(payload && payload.lng)
+            // Validated here as well as in the browser: these reach an external search
+            // provider, and `Number(undefined)` is NaN rather than a usable coordinate.
+            if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+            if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return
+            session.coords = { lat, lng }
+            console.log('[voice] location consent granted')
+        })
+
+        /**
+         * Confirm or reject from the UI card.
+         *
+         * The same pending record and the same commit path as a spoken yes — a button
+         * press is not a second, weaker route to a mutation. Phrased as a synthetic user
+         * turn so the model stays in step with what just happened.
+         */
+        socket.on(ClientEvent.Decide, (payload) => {
+            const approved = Boolean(payload && payload.approved)
+            session
+                .decidePending(approved)
+                .catch((error) => console.error('[voice] decide failed:', error))
+        })
+
         socket.on(ClientEvent.Stop, () => session.dispose())
-        socket.on('disconnect', () => session.dispose())
+        socket.on('disconnect', () => {
+            pendingActions.clearSession(socket.data.userId, socket.id)
+            session.dispose()
+        })
     })
 
     console.log(`[voice] receptionist gateway listening on ${VOICE_NAMESPACE}`)
