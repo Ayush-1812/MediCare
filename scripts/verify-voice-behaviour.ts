@@ -82,6 +82,31 @@ const CANNED: Record<string, unknown> = {
             { id: 'doc-1', name: 'Dr Mehta', speciality: 'Gastroenterologist', fee: 600, languages: null },
         ],
     },
+    /**
+     * Proposals must be stubbed too.
+     *
+     * Added after this harness scored a pass-worthy run as a failure: the prompt now
+     * routes every booking through propose_booking, and with no stub the tool returned
+     * "no data available", so the model correctly said it could not look the slot up — and
+     * the assertion read that as a missing confirmation. The model was right and the
+     * harness was out of date.
+     */
+    propose_booking: {
+        proposed: true,
+        doctor: 'Dr Mehta',
+        when: `${buildTimeContext('Asia/Kolkata').tomorrowLabel} at 05:30 PM`,
+        fee: 600,
+        notYetBooked: true,
+        instruction:
+            'Read this back to the patient with the full weekday, date, time, timezone and ' +
+            'fee, then wait for a clear yes before calling confirm_action.',
+    },
+    confirm_action: {
+        booked: true,
+        appointmentId: 'appt-1',
+        amount: 600,
+        paymentNote: 'Not paid yet. Offer to open the payment page.',
+    },
     list_my_prescriptions: {
         total: 1,
         prescriptions: [
