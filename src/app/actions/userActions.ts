@@ -6,7 +6,8 @@ import { revalidatePath } from 'next/cache'
 import { v2 as cloudinary } from 'cloudinary'
 import { createSession, destroySession, getSessionId } from '@/lib/auth'
 import { rateLimit, resetRateLimit, retryAfterMessage } from '@/lib/rateLimit'
-import { toSlotMap } from '@/lib/schedule'
+import { formatSlotDateKey, generateSlots, toSlotMap } from '@/lib/schedule'
+import { appointmentStatus } from '@/lib/appointment'
 import { after } from 'next/server'
 import { sendAppointmentBookedEmails } from '@/lib/mail/appointmentEmails'
 import {
@@ -507,5 +508,145 @@ export async function updateProfileDetails(formData: FormData) {
         return { success: true as const, message: 'Profile saved' }
     } catch (error) {
         return unexpected('updateProfileDetails', error)
+    }
+}
+
+// ─── Rescheduling ────────────────────────────────────────────────────────────
+
+/**
+ * Moves an existing appointment to a different slot with the same doctor.
+ *
+ * Until now MediCare had no reschedule at all, and the only way to achieve one was to
+ * cancel and book again. That sequence is not atomic: between the two steps the patient's
+ * original slot is released to everyone else, so if the new slot is taken in that window
+ * they end up with no appointment having started with a perfectly good one. For a medical
+ * consultation that is a real loss, not an inconvenience.
+ *
+ * So both halves happen inside a single `$transaction`: the old slot is freed and the new
+ * one claimed together, or neither is. If the target slot has gone, `SLOT_TAKEN` aborts
+ * the whole thing and the original booking is still intact.
+ *
+ * Deliberately same-doctor only. Moving to a different doctor changes the fee and the
+ * `docData` snapshot, which makes it a new booking rather than a reschedule — and a voice
+ * agent quietly changing who you are seeing is not a reschedule by any reasonable
+ * reading.
+ */
+export async function rescheduleAppointment(
+    appointmentId: string,
+    slotDate: string,
+    slotTime: string,
+) {
+    try {
+        const userId = await getSessionId('user')
+        if (!userId) return fail('Your session has expired. Please sign in again.')
+
+        if (!appointmentId || !slotDate || !slotTime) {
+            return fail('Please pick a new date and time slot')
+        }
+
+        const appointment = await prisma.appointment.findUnique({
+            where: { id: appointmentId },
+            select: {
+                id: true,
+                userId: true,
+                docId: true,
+                slotDate: true,
+                slotTime: true,
+                cancelled: true,
+                isCompleted: true,
+                startTime: true,
+            },
+        })
+        // Ownership is checked here and never taken from the caller's word for it.
+        if (!appointment || appointment.userId !== userId) return fail('Appointment not found')
+        if (appointment.cancelled) return fail('This appointment was cancelled.')
+        if (appointment.isCompleted) return fail('This consultation has already been completed.')
+
+        // An appointment whose slot has already elapsed cannot be moved — it is a missed
+        // consultation, and rescheduling it would silently rewrite history.
+        if (appointmentStatus(appointment) !== 'Scheduled') {
+            return fail('That appointment has already passed. Please book a new one.')
+        }
+
+        if (appointment.slotDate === slotDate && appointment.slotTime === slotTime) {
+            return fail('That is already the time of this appointment.')
+        }
+
+        const moved = await prisma.$transaction(async (tx) => {
+            const doctor = await tx.doctor.findUnique({
+                where: { id: appointment.docId },
+                select: {
+                    name: true,
+                    available: true,
+                    slots_booked: true,
+                    availableDays: true,
+                    slotStartTime: true,
+                    slotEndTime: true,
+                    slotDuration: true,
+                },
+            })
+            if (!doctor) throw new Error('DOCTOR_NOT_FOUND')
+            if (!doctor.available) throw new Error('DOCTOR_UNAVAILABLE')
+
+            // The target must be a slot this doctor actually offers, not merely one that
+            // happens to be absent from `slots_booked`. Generated from the same module the
+            // booking page uses, so a voice caller cannot reach a time the UI would not.
+            const offered = generateSlots(doctor).some(
+                (day) =>
+                    day.length > 0 &&
+                    formatSlotDateKey(day[0].datetime) === slotDate &&
+                    day.some((slot) => slot.time === slotTime),
+            )
+            if (!offered) throw new Error('SLOT_NOT_OFFERED')
+
+            const slots = toSlotMap(doctor.slots_booked)
+            if ((slots[slotDate] ?? []).includes(slotTime)) throw new Error('SLOT_TAKEN')
+
+            // Free the old slot and claim the new one in the same write.
+            const previous = slots[appointment.slotDate] ?? []
+            slots[appointment.slotDate] = previous.filter((t) => t !== appointment.slotTime)
+            slots[slotDate] = [...(slots[slotDate] ?? []), slotTime]
+
+            await tx.doctor.update({
+                where: { id: appointment.docId },
+                data: { slots_booked: slots },
+            })
+
+            const updated = await tx.appointment.update({
+                where: { id: appointmentId },
+                data: { slotDate, slotTime },
+                select: { id: true, slotDate: true, slotTime: true },
+            })
+
+            return { updated, doctorName: doctor.name }
+        })
+
+        revalidatePath('/my-appointments')
+        revalidatePath('/doctor-dashboard/appointments')
+        revalidatePath('/doctor-dashboard/dashboard')
+
+        return {
+            success: true as const,
+            message: 'Appointment rescheduled',
+            appointmentId: moved.updated.id,
+            slotDate: moved.updated.slotDate,
+            slotTime: moved.updated.slotTime,
+            doctorName: moved.doctorName,
+            previous: { slotDate: appointment.slotDate, slotTime: appointment.slotTime },
+        }
+    } catch (error) {
+        if (error instanceof Error) {
+            if (error.message === 'SLOT_TAKEN') {
+                return fail('That slot has just been taken. Your original appointment is unchanged.')
+            }
+            if (error.message === 'SLOT_NOT_OFFERED') {
+                return fail('That doctor does not have a slot at that time.')
+            }
+            if (error.message === 'DOCTOR_UNAVAILABLE') {
+                return fail('That doctor is not accepting bookings right now.')
+            }
+            if (error.message === 'DOCTOR_NOT_FOUND') return fail('Doctor not available')
+        }
+        return unexpected('rescheduleAppointment', error)
     }
 }
