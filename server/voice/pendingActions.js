@@ -90,14 +90,20 @@ class PendingActionStore {
         return record
     }
 
+    /**
+     * Reads the pending action without touching it.
+     *
+     * Non-destructive deliberately. An earlier version deleted expired records here, which
+     * made the *reason* a later `claim` could give depend on whether anything had peeked
+     * first — so a genuinely expired proposal was sometimes reported as "nothing pending".
+     * Those produce different spoken explanations, and "that proposal expired, let me set
+     * it up again" is far more useful to a patient than "there is nothing to confirm".
+     * Cleanup is the sweeper's job.
+     */
     peek(userId, sessionId) {
         const record = this.pending.get(this.key(userId, sessionId))
         if (!record) return null
-        if (Date.now() > record.expiresAt) {
-            this.pending.delete(this.key(userId, sessionId))
-            return null
-        }
-        return record
+        return Date.now() > record.expiresAt ? null : record
     }
 
     /**
