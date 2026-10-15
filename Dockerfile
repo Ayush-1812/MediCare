@@ -48,6 +48,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.mjs ./next.config.mjs
 # The custom Node server that hosts Next + the Socket.IO signaling channel.
 COPY --from=builder --chown=nextjs:nodejs /app/server.js ./server.js
+# server.js `require`s these at boot — the shared cookie/JWT helpers and the voice
+# receptionist gateway. Without them the container exits immediately with
+# MODULE_NOT_FOUND and the whole app is down, not just the voice feature, so this COPY
+# is not optional. `.dockerignore` keeps `server/.env` out of the image.
+COPY --from=builder --chown=nextjs:nodejs /app/server ./server
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
 RUN chmod +x ./docker-entrypoint.sh
 
