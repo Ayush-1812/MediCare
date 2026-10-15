@@ -15,7 +15,8 @@
     "verify:voice:behaviour": "tsx scripts/verify-voice-behaviour.ts",
     "check:voice:i18n": "node scripts/check-voice-i18n.js",
     "gen:voice:i18n": "node scripts/generate-voice-i18n.js",
-    "test:voice": "tsx scripts/test-voice-tools.ts"
+    "test:voice": "tsx scripts/test-voice-tools.ts",
+    "demo:voice": "tsx scripts/demo-voice.ts"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",
