@@ -4,18 +4,23 @@ import type { NextRequest } from 'next/server'
 /**
  * Route protection by role.
  *
+ * Named `proxy` in `src/proxy.ts`: Next 16 renamed the `middleware` file convention,
+ * and keeping the old name logs a deprecation warning on every start and build. The
+ * function name changes with the filename — a `proxy.ts` exporting `middleware` is not
+ * picked up at all, which would silently leave every protected route open.
+ *
  * This previously treated the three session cookies as interchangeable — any one of them
  * satisfied every protected route — so a signed-in patient could open the admin pages
  * simply by navigating to them. Each area now demands its own cookie.
  *
- * Note what this does and does not do. Middleware only decides which *pages* get served;
+ * Note what this does and does not do. The proxy only decides which *pages* get served;
  * it cannot be the only defence, because server actions are POST endpoints that bypass
  * page routing entirely. The real authorization lives in the actions themselves
  * (`requireAdmin` in adminActions, `getSessionId` elsewhere). This is the outer layer:
  * it stops the wrong person seeing the wrong screen.
  *
  * The cookie is checked for presence only — verifying its signature needs the `jsonwebtoken`
- * library, which does not run on the Edge runtime middleware uses. A forged cookie
+ * library, which does not run on the Edge runtime this executes in. A forged cookie
  * therefore gets past this check and is then rejected by the server action behind it,
  * which does verify properly.
  */
@@ -26,7 +31,7 @@ const USER_COOKIE = 'token'
 const DOCTOR_COOKIE = 'docToken'
 const ADMIN_COOKIE = 'adminToken'
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
 
   // Public pages, framework internals and static assets are always allowed through.
