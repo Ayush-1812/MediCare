@@ -17,7 +17,11 @@
     "gen:voice:i18n": "node scripts/generate-voice-i18n.js",
     "test:voice": "tsx scripts/test-voice-tools.ts",
     "demo:voice": "tsx scripts/demo-voice.ts",
-    "measure:voice": "tsx scripts/measure-voice-latency.ts"
+    "measure:voice": "tsx scripts/measure-voice-latency.ts",
+    "seed:doctors": "tsx prisma/seed-doctors.ts",
+    "seed:doctors:commit": "tsx prisma/seed-doctors.ts --commit",
+    "seed:doctors:remove": "tsx prisma/seed-doctors.ts --remove --commit",
+    "check:seed": "tsx scripts/check-seed.ts"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",
