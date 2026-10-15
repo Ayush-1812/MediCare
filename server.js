@@ -14,7 +14,6 @@
  */
 
 const { createServer } = require('http')
-const { parse } = require('url')
 const next = require('next')
 const { Server } = require('socket.io')
 const crypto = require('crypto')
@@ -90,8 +89,19 @@ async function authorize(handshake) {
 }
 
 app.prepare().then(async () => {
+    // Next parses the URL itself. The old form passed `parse(req.url, true)` from the
+    // legacy `url` module, which Node now warns about on every boot:
+    //
+    //   [DEP0169] `url.parse()` behavior is not standardized and prone to errors that
+    //   have security implications.
+    //
+    // The WHATWG replacement is not a drop-in here — `handle` expects Node's
+    // `UrlWithParsedQuery` shape (a `pathname` plus `query` as an object), and a WHATWG
+    // `URL` has neither, so substituting one would break routing rather than fix it.
+    // Omitting the argument entirely is the supported form: this server does no custom
+    // routing, so there is nothing for it to pre-parse on Next's behalf.
     const server = createServer((req, res) => {
-        handle(req, res, parse(req.url, true))
+        handle(req, res)
     })
 
     const io = new Server(server, {
