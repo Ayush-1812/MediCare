@@ -54,7 +54,19 @@ COPY --from=builder --chown=nextjs:nodejs /app/server.js ./server.js
 # is not optional. `.dockerignore` keeps `server/.env` out of the image.
 COPY --from=builder --chown=nextjs:nodejs /app/server ./server
 COPY --chown=nextjs:nodejs docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x ./docker-entrypoint.sh
+# `sed` strips carriage returns before chmod. Docker copies the *working tree*, and a
+# Windows checkout with `core.autocrlf=true` — Git for Windows' default — rewrites this
+# script to CRLF. The kernel then reads the shebang as `/bin/sh\r`, which does not exist,
+# and the container dies at startup with:
+#
+#     exec ./docker-entrypoint.sh: no such file or directory
+#
+# That reads as a missing file, not a line-ending problem, and sends you hunting in the
+# wrong place entirely. `.gitattributes` now pins `*.sh` to LF, but that only takes effect
+# on a fresh checkout or after `git add --renormalize`, so existing clones would still
+# produce a broken image. Normalising here makes the build correct from any checkout on
+# any platform, which is where the guarantee belongs.
+RUN sed -i 's/\r$//' ./docker-entrypoint.sh && chmod +x ./docker-entrypoint.sh
 
 USER nextjs
 EXPOSE 3000
