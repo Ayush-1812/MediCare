@@ -17,6 +17,7 @@
  */
 
 import { Type, type FunctionDeclaration } from '@google/genai'
+import { FAQ_TOPICS } from '@/lib/faq'
 
 export const VOICE_TOOLS: FunctionDeclaration[] = [
     {
@@ -210,6 +211,177 @@ export const VOICE_TOOLS: FunctionDeclaration[] = [
     },
 ]
 
+// ─── Phase 4 additions ───────────────────────────────────────────────────────
+
+VOICE_TOOLS.push(
+    {
+        name: 'get_doctor_profile',
+        description:
+            "Returns one doctor's full public profile: speciality, degree, experience, fee, " +
+            'hospital, city, rating, and the languages they speak if recorded. Most doctors ' +
+            'have no languages recorded — when `languagesListed` is false, say it is not ' +
+            'listed rather than assuming.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                doctorId: { type: Type.STRING, description: 'Preferred, from search_doctors.' },
+                doctorName: { type: Type.STRING, description: 'Used only without an id.' },
+            },
+        },
+    },
+    {
+        name: 'get_consultation_status',
+        description:
+            'Returns whether a video consultation can be joined right now and, if not, why ' +
+            'not. Use before telling anyone to join. Only the doctor can open the room — ' +
+            'never imply you can start it or that you can let them in early.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: { appointmentId: { type: Type.STRING } },
+            required: ['appointmentId'],
+        },
+    },
+    {
+        name: 'explain_prescription',
+        description:
+            'Returns the extracted contents of one saved prescription, with how confident ' +
+            'the scan was. Read medicines and doses exactly as given. This is a scan of a ' +
+            'document, not advice from MediCare — say that a clinician must verify anything ' +
+            'they plan to act on, and never suggest a change to a dose.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: { prescriptionId: { type: Type.STRING, description: 'From list_my_prescriptions.' } },
+            required: ['prescriptionId'],
+        },
+    },
+    {
+        name: 'get_payment_status',
+        description:
+            'Returns whether one appointment has been paid, and the amount. You can read ' +
+            'this status and open the payment page; you can never take a payment, confirm ' +
+            'one yourself, or ask for a card, UPI id or OTP.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: { appointmentId: { type: Type.STRING } },
+            required: ['appointmentId'],
+        },
+    },
+    {
+        name: 'find_nearby_pharmacies',
+        description:
+            'Finds pharmacies near the patient. Requires their location, which they grant ' +
+            'with a button in the panel — if the result says consentRequired, ask them to ' +
+            'allow location access and do not guess their city.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: { limit: { type: Type.NUMBER, description: '1-5, defaults to 3.' } },
+        },
+    },
+    {
+        name: 'answer_faq',
+        description:
+            "Answers a common question about MediCare using the app's own published FAQ. Use " +
+            'this instead of answering from memory about how MediCare works. If the topic is ' +
+            'not covered, say so and offer the contact page.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                topic: {
+                    type: Type.STRING,
+                    enum: FAQ_TOPICS,
+                    description: 'Which published question this matches.',
+                },
+            },
+            required: ['topic'],
+        },
+    },
+    {
+        name: 'get_support_contact',
+        description:
+            'Opens the contact page so the patient can reach a human. MediCare has no ticket ' +
+            'system, so you cannot submit a request on their behalf — say that plainly rather ' +
+            'than implying something was filed.',
+        parameters: { type: Type.OBJECT, properties: {} },
+    },
+
+    // ── Consequential actions: propose, then confirm ─────────────────────────
+    {
+        name: 'propose_booking',
+        description:
+            'Prepares a booking and returns the exact details to read back. **This does not ' +
+            'book anything.** Call get_doctor_availability first and use a slot time exactly ' +
+            'as it was returned. After calling this, read back the doctor, weekday, date, ' +
+            'time, timezone and fee, then wait for a clear yes and call confirm_action. ' +
+            'Never say an appointment is booked until confirm_action reports booked: true.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                doctorId: { type: Type.STRING },
+                slotDate: { type: Type.STRING, description: 'The slotDateKey from get_doctor_availability.' },
+                slotTime: { type: Type.STRING, description: 'Exactly as returned, e.g. "05:30 PM".' },
+            },
+            required: ['doctorId', 'slotDate', 'slotTime'],
+        },
+    },
+    {
+        name: 'propose_cancellation',
+        description:
+            'Prepares a cancellation and returns the details to read back. **This does not ' +
+            'cancel anything.** Read back the doctor and the full date and time, wait for a ' +
+            'clear yes, then call confirm_action. If the appointment was paid, say MediCare ' +
+            'has no automatic refund and they must contact support about the fee — do not ' +
+            'promise a refund.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: { appointmentId: { type: Type.STRING } },
+            required: ['appointmentId'],
+        },
+    },
+    {
+        name: 'propose_reschedule',
+        description:
+            'Prepares moving an existing appointment to a different slot with the same ' +
+            'doctor. **This does not change anything.** Read back both the old and the new ' +
+            'date and time in full, wait for a clear yes, then call confirm_action. To change ' +
+            'doctor, cancel and book instead — and say so.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                appointmentId: { type: Type.STRING },
+                slotDate: { type: Type.STRING, description: 'The slotDateKey from get_doctor_availability.' },
+                slotTime: { type: Type.STRING, description: 'Exactly as returned.' },
+            },
+            required: ['appointmentId', 'slotDate', 'slotTime'],
+        },
+    },
+    {
+        name: 'confirm_action',
+        description:
+            'Commits the action you most recently proposed, after the patient has clearly ' +
+            'agreed to it. Takes no parameters: the details were stored when you proposed ' +
+            'them, so they cannot be changed here. Call it only after an unambiguous yes — ' +
+            'if they hesitated, corrected a detail, or said anything unclear, propose again ' +
+            'instead. Report exactly what comes back and nothing more.',
+        parameters: {
+            type: Type.OBJECT,
+            properties: {
+                action: {
+                    type: Type.STRING,
+                    enum: ['book', 'cancel', 'reschedule'],
+                    description: 'Which action you believe you are confirming, as a safety check.',
+                },
+            },
+        },
+    },
+    {
+        name: 'cancel_pending_action',
+        description:
+            'Discards the action you proposed, because the patient said no or changed their ' +
+            'mind. Use this rather than leaving a proposal hanging.',
+        parameters: { type: Type.OBJECT, properties: {} },
+    },
+)
+
 /** Short UI labels, so the "thinking" state can say what it is actually doing. */
 export const TOOL_LABELS: Record<string, string> = {
     get_my_profile: 'Looking up your profile',
@@ -226,9 +398,33 @@ export const TOOL_LABELS: Record<string, string> = {
 export const TOOL_NAMES = VOICE_TOOLS.map((t) => t.name as string)
 
 /**
- * Tools whose effects are visible outside this conversation. Empty in Phase 2 — every
- * tool above is a read or a client-side navigation. The executor still routes through
- * the idempotency path so that adding `book_appointment` here is a one-line change
- * rather than a redesign.
+ * Tools whose effects are visible outside this conversation.
+ *
+ * Note what is *not* here: `propose_booking` and its siblings change nothing, so they are
+ * ordinary reads. The single mutating entry point is `confirm_action`, and it carries no
+ * parameters of its own — the gateway commits what the pending-action store holds. That is
+ * why this set has one member rather than three.
  */
-export const MUTATING_TOOLS = new Set<string>([])
+export const MUTATING_TOOLS = new Set<string>(['confirm_action'])
+
+/**
+ * Handled by the gateway rather than forwarded to the tool endpoint, because they operate
+ * on the pending-action store, which lives with the session.
+ */
+export const GATEWAY_TOOLS = new Set<string>(['confirm_action', 'cancel_pending_action'])
+
+/** Labels for the Phase 4 tools, in the same shape as the originals. */
+Object.assign(TOOL_LABELS, {
+    get_doctor_profile: 'Opening that profile',
+    get_consultation_status: 'Checking your consultation',
+    explain_prescription: 'Reading that prescription',
+    get_payment_status: 'Checking the payment',
+    find_nearby_pharmacies: 'Finding nearby pharmacies',
+    answer_faq: 'Looking that up',
+    get_support_contact: 'Opening contact details',
+    propose_booking: 'Preparing the booking',
+    propose_cancellation: 'Preparing the cancellation',
+    propose_reschedule: 'Preparing the change',
+    confirm_action: 'Confirming',
+    cancel_pending_action: 'Cancelling that',
+})
