@@ -72,6 +72,39 @@ export const MESSAGES = {
     err_network: 'The voice connection was lost. Please start again.',
     err_internal: 'Could not start the voice assistant.',
 
+    // ── Confirmation and result cards ────────────────────────────────────
+    // Card labels are sent from the server as keys, not text, so a confirmation reads in
+    // the patient's language. A consequential action is the last place a stray English
+    // label belongs.
+    btn_confirm: 'Confirm',
+    btn_reject: 'Cancel',
+    confirm_title_book: 'Confirm booking',
+    confirm_title_cancel: 'Confirm cancellation',
+    confirm_title_reschedule: 'Confirm reschedule',
+    card_doctor: 'Doctor',
+    card_when: 'When',
+    card_fee: 'Fee',
+    card_from: 'From',
+    card_to: 'To',
+    card_paid: 'Paid',
+    card_slots: 'Available times',
+    card_pharmacies: 'Nearby pharmacies',
+    card_appointments: 'Your appointments',
+    card_join_now: 'Can join now',
+    card_view: 'View',
+
+    // ── Location consent ─────────────────────────────────────────────────
+    location_why: 'To find pharmacies near you, MediCare needs your location.',
+    allow_location: 'Allow location access',
+    location_requesting: 'Asking your browser…',
+    location_denied:
+        'Location access was blocked. You can allow it in your browser’s address bar, or ask about something else.',
+    location_unavailable: 'This browser cannot share a location.',
+
+    // ── Privacy note ─────────────────────────────────────────────────────
+    privacy_note:
+        'This conversation is not recorded. The transcript stays in this panel and is cleared when you close it.',
+
     // ── Tool activity labels ─────────────────────────────────────────────
     tool_get_my_profile: 'Looking up your profile',
     tool_list_my_appointments: 'Checking your appointments',

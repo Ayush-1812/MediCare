@@ -159,11 +159,11 @@ export async function proposeBooking(args: ToolArgs): Promise<ToolOutcome> {
         uiPayload: {
             kind: 'confirm',
             action: 'book',
-            title: 'Confirm booking',
+            titleKey: 'confirm_title_book',
             lines: [
-                { label: 'Doctor', value: doctor.name },
-                { label: 'When', value: when },
-                { label: 'Fee', value: `₹${fee}` },
+                { labelKey: 'card_doctor', value: doctor.name },
+                { labelKey: 'card_when', value: when },
+                { labelKey: 'card_fee', value: `₹${fee}` },
             ],
         },
     }
@@ -228,12 +228,12 @@ export async function proposeCancellation(args: ToolArgs): Promise<ToolOutcome> 
         uiPayload: {
             kind: 'confirm',
             action: 'cancel',
-            title: 'Confirm cancellation',
+            titleKey: 'confirm_title_cancel',
             lines: [
-                { label: 'Doctor', value: doctorName },
-                { label: 'When', value: when },
+                { labelKey: 'card_doctor', value: doctorName },
+                { labelKey: 'card_when', value: when },
                 ...(appointment.payment
-                    ? [{ label: 'Paid', value: `₹${appointment.amount} — contact support about the fee` }]
+                    ? [{ labelKey: 'card_paid', value: `₹${appointment.amount} — contact support about the fee` }]
                     : []),
             ],
         },
@@ -326,11 +326,11 @@ export async function proposeReschedule(args: ToolArgs): Promise<ToolOutcome> {
         uiPayload: {
             kind: 'confirm',
             action: 'reschedule',
-            title: 'Confirm reschedule',
+            titleKey: 'confirm_title_reschedule',
             lines: [
-                { label: 'Doctor', value: doctorName },
-                { label: 'From', value: from },
-                { label: 'To', value: to },
+                { labelKey: 'card_doctor', value: doctorName },
+                { labelKey: 'card_from', value: from },
+                { labelKey: 'card_to', value: to },
             ],
         },
     }

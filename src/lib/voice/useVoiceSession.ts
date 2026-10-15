@@ -29,6 +29,8 @@ import {
     type ToolPayload,
     type TranscriptPayload,
     type TurnCompletePayload,
+    type UiPayload,
+    type PendingPayload,
     type VoiceErrorCode,
     type VoiceState,
 } from './protocol'
@@ -62,6 +64,9 @@ export type VoiceSessionError = ErrorPayload | null
  */
 export type LanguageSuggestion = { code: LanguageCode; label: string } | null
 
+/** Browser location permission as far as this session is concerned. */
+export type LocationState = 'unknown' | 'requesting' | 'granted' | 'denied' | 'unavailable'
+
 export type UseVoiceSession = {
     state: VoiceState
     transcript: TranscriptEntry[]
@@ -75,6 +80,15 @@ export type UseVoiceSession = {
     connected: boolean
     /** Localized string lookup for the current language. */
     t: Translator
+    /** Renderable tool results, most recent last. */
+    cards: UiPayload[]
+    /** Non-null with `state: 'awaiting'` while a confirmation card should show. */
+    pending: PendingPayload | null
+    locationState: LocationState
+    /** Confirm or reject the pending action from the card. */
+    decide: (approved: boolean) => void
+    /** Asks the browser for location, then sends it. Needs a user gesture. */
+    requestLocation: () => void
     suggestion: LanguageSuggestion
     acceptSuggestion: () => void
     dismissSuggestion: () => void
@@ -125,6 +139,9 @@ export function useVoiceSession(): UseVoiceSession {
     const [connected, setConnected] = useState(false)
     const [suggestion, setSuggestion] = useState<LanguageSuggestion>(null)
     const [switchingLanguage, setSwitchingLanguage] = useState(false)
+    const [cards, setCards] = useState<UiPayload[]>([])
+    const [pending, setPending] = useState<PendingPayload | null>(null)
+    const [locationState, setLocationState] = useState<LocationState>('unknown')
 
     const t = useMemo(() => createTranslator(language), [language])
     /** Suggestions the patient has waved away, so they are not asked twice. */
@@ -350,6 +367,8 @@ export function useVoiceSession(): UseVoiceSession {
         setError(null)
         setState('connecting')
         setTranscript([])
+        setCards([])
+        setPending(null)
         currentTurnRef.current = 1
 
         // `path` must match the Socket.IO server mounted in server.js; the namespace is
@@ -474,6 +493,21 @@ export function useVoiceSession(): UseVoiceSession {
             }
         })
 
+        socket.on(ServerEvent.Ui, (payload: UiPayload) => {
+            // Capped: a long conversation would otherwise accumulate every card it ever
+            // rendered, and the panel is a small scroll area.
+            setCards((prev) => [...prev, payload].slice(-6))
+        })
+
+        socket.on(ServerEvent.Pending, (payload: PendingPayload) => {
+            setPending(payload.state === 'awaiting' ? payload : null)
+            // Once resolved, the confirmation card is stale and must not linger — leaving
+            // a Confirm button on screen after the action completed invites a second press.
+            if (payload.state !== 'awaiting') {
+                setCards((prev) => prev.filter((c) => c.kind !== 'confirm'))
+            }
+        })
+
         socket.on(ServerEvent.Reconnecting, (payload: ReconnectingPayload) => {
             setState('reconnecting')
             setActivity(null)
@@ -532,6 +566,45 @@ export function useVoiceSession(): UseVoiceSession {
         }
     }, [])
 
+    const decide = useCallback((approved: boolean) => {
+        socketRef.current?.emit(ClientEvent.Decide, { approved })
+        setPending(null)
+        setCards((prev) => prev.filter((c) => c.kind !== 'confirm'))
+    }, [])
+
+    /**
+     * Requests browser location and forwards it.
+     *
+     * Deliberately only ever called from a button press. `navigator.geolocation` needs a
+     * user gesture, and asking for someone's location the moment they open a voice panel
+     * — before they have mentioned a pharmacy — is a permission prompt they have no
+     * context for and will reasonably refuse.
+     */
+    const requestLocation = useCallback(() => {
+        if (!navigator.geolocation) {
+            setLocationState('unavailable')
+            return
+        }
+        setLocationState('requesting')
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setLocationState('granted')
+                socketRef.current?.emit(ClientEvent.Location, {
+                    lat: position.coords.latitude,
+                    lng: position.coords.longitude,
+                })
+                setCards((prev) => prev.filter((c) => c.kind !== 'location_consent'))
+                // Nudge the model to retry now that a position exists, rather than leaving
+                // the patient to repeat themselves.
+                socketRef.current?.emit(ClientEvent.Text, {
+                    text: '[Location access granted. Search for nearby pharmacies now.]',
+                })
+            },
+            () => setLocationState('denied'),
+            { timeout: 10_000, maximumAge: 5 * 60 * 1000 },
+        )
+    }, [])
+
     const acceptSuggestion = useCallback(() => {
         if (suggestion) changeLanguage(suggestion.code)
     }, [suggestion, changeLanguage])
@@ -552,6 +625,11 @@ export function useVoiceSession(): UseVoiceSession {
             language,
             connected,
             t,
+            cards,
+            pending,
+            locationState,
+            decide,
+            requestLocation,
             suggestion,
             acceptSuggestion,
             dismissSuggestion,
@@ -573,6 +651,11 @@ export function useVoiceSession(): UseVoiceSession {
             language,
             connected,
             t,
+            cards,
+            pending,
+            locationState,
+            decide,
+            requestLocation,
             suggestion,
             acceptSuggestion,
             dismissSuggestion,
