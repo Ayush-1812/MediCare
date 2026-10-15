@@ -141,11 +141,23 @@ provider calls and is reported separately — see `PHASE6_REPORT.md`.
 
 ## 5. Deployment notes
 
-- **Sticky sessions are required** for more than one instance. A voice session is a
-  stateful socket and the pending-action store is per-process. The Redis adapter already
-  configured for signaling rooms (`REDIS_URL`) covers room fan-out but not pending
-  actions; moving those to Redis is the documented next step if a non-sticky multi-instance
-  deployment is needed.
+- **Multiple instances work without sticky sessions, for the voice path.** The voice
+  client connects with `transports: ['websocket']` only, so there is no long-polling
+  handshake to split across instances, and a WebSocket stays on one backend for its
+  lifetime. Every piece of session state — the Live session and the pending-action store —
+  lives in that same process, and the internal tool and commit calls go to `127.0.0.1`, so
+  they reach the same container.
+
+  The one consequence: if the socket drops and reconnects to a *different* instance, the
+  in-flight proposal is gone and the patient has to be asked again. That is safe rather
+  than incorrect — a dropped pending action commits nothing — but it is a reason to move
+  the store to Redis if reconnect-mid-booking becomes common.
+
+  *(An earlier draft of this document claimed sticky sessions were required. They are not,
+  for voice. Note the asymmetry: the pre-existing WebRTC signaling client uses
+  `['websocket', 'polling']`, and it is the polling handshake that needs session affinity
+  in a multi-instance deployment — the `REDIS_URL` adapter fans room events out but does
+  not give the handshake affinity.)*
 - **No migration.** `rescheduleAppointment` writes existing columns.
 - The Docker image needs no change — `public/voice/*.js` ship as static assets and the
   gateway runs inside the existing `node server.js` entrypoint.
