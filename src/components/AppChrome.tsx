@@ -4,6 +4,7 @@ import React from 'react'
 import { usePathname } from 'next/navigation'
 import Navbar from '@/components/Navbar'
 import Footer from '@/components/Footer'
+import VoiceReceptionist from '@/components/Voice/VoiceReceptionist'
 
 /**
  * Site chrome — navbar, footer and the centred content gutter — for pages that want it.
@@ -34,6 +35,14 @@ const AppChrome = ({ children }: { children: React.ReactNode }) => {
             <Navbar />
             {children}
             <Footer />
+            {/*
+              Mounted on the non-immersive branch only, which is exactly the behaviour the
+              voice feature needs: the consultation room and the auth pages are immersive,
+              so the receptionist cannot be opened while a video call owns the microphone,
+              and it never appears over a login form. The gateway refuses a mid-consultation
+              session as well — this is the first of the two defences, not the only one.
+            */}
+            <VoiceReceptionist />
         </div>
     )
 }
