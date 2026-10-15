@@ -1,0 +1,44 @@
+# Line-ending policy.
+#
+# Without this file, a Windows checkout with `core.autocrlf=true` (the default from Git
+# for Windows' installer) rewrites every text file in the working tree to CRLF. Git's
+# stored blobs stay LF, so the repository is fine and a Linux or CI checkout is fine — but
+# `docker build` copies the *working tree*, and a shell script with a CRLF shebang makes
+# the kernel look for an interpreter called `/bin/sh\r`.
+#
+# The symptom is this, with nothing else to go on:
+#
+#     exec ./docker-entrypoint.sh: no such file or directory
+#
+# which reads as a missing file rather than a line-ending problem and sends you looking in
+# entirely the wrong place. The image builds successfully and then refuses to start.
+#
+# So: anything executed by a Unix kernel or interpreted by a shell is pinned to LF,
+# regardless of the platform it was checked out on.
+
+* text=auto
+
+# Shell scripts and container entrypoints — these are the ones that actually break.
+*.sh text eol=lf
+docker-entrypoint.sh text eol=lf
+
+# Dockerfiles and compose files: tolerate CRLF today, but there is no reason to risk it.
+Dockerfile text eol=lf
+Dockerfile.* text eol=lf
+*.dockerfile text eol=lf
+docker-compose*.yml text eol=lf
+
+# Prisma schema and migrations are read by a Linux-side engine.
+*.prisma text eol=lf
+
+# Binary assets must never be touched.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+*.traineddata binary
