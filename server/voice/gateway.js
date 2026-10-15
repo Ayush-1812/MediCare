@@ -89,6 +89,23 @@ class VoiceSession {
         this.language = null
         this.liveConfig = null
         this.model = null
+        /** Resolved from the patient's browser; feeds date handling in the prompt. */
+        this.timeZone = null
+
+        /**
+         * Plain-text turns, oldest first.
+         *
+         * Kept because a language change needs a brand-new provider session — the Live
+         * API fixes `speechConfig.languageCode` at setup — and reconnecting with an empty
+         * context would drop the patient mid-task, which is exactly what Phase 3 forbids.
+         * Provider-side resumption handles cannot be relied on across a config change, so
+         * the conversation is replayed explicitly instead. Capped: this is dialogue, and
+         * an unbounded buffer on a long session is a slow leak.
+         */
+        this.history = []
+        this.HISTORY_LIMIT = 24
+        /** Accumulates the current assistant turn's transcript for the history. */
+        this.assistantTurnText = ''
 
         /**
          * Monotonic turn counter. Every assistant-produced message carries it, and it is
@@ -138,9 +155,23 @@ class VoiceSession {
 
     // ── Lifecycle ───────────────────────────────────────────────────────────
 
+    /** Appends a completed turn to the replayable history. */
+    remember(role, text) {
+        const trimmed = String(text || '').trim()
+        if (!trimmed) return
+        this.history.push({ role, text: trimmed })
+        if (this.history.length > this.HISTORY_LIMIT) {
+            this.history.splice(0, this.history.length - this.HISTORY_LIMIT)
+        }
+    }
+
     /** Fetches this session's config from Next, then opens the provider connection. */
-    async start(language) {
-        const bootstrap = await this.fetchJson('/api/voice/session', { language })
+    async start(language, timeZone) {
+        if (timeZone) this.timeZone = timeZone
+        const bootstrap = await this.fetchJson('/api/voice/session', {
+            language,
+            timeZone: this.timeZone,
+        })
         if (!bootstrap || !bootstrap.ok) {
             const status = bootstrap && bootstrap.__status
             if (status === 401) {
@@ -150,6 +181,7 @@ class VoiceSession {
         }
 
         this.language = bootstrap.language
+        this.timeZone = bootstrap.timeZone || this.timeZone
         this.model = bootstrap.model
         this.liveConfig = bootstrap.config
         await this.connectLive({ resumed: false })
@@ -357,6 +389,7 @@ class VoiceSession {
         }
 
         if (content.inputTranscription && content.inputTranscription.text) {
+            this.remember('user', content.inputTranscription.text)
             this.socket.emit(ServerEvent.Transcript, {
                 role: 'user',
                 text: content.inputTranscription.text,
@@ -375,6 +408,10 @@ class VoiceSession {
         }
 
         if (content.outputTranscription && content.outputTranscription.text) {
+            // Accumulated rather than remembered per fragment: the provider streams the
+            // assistant's transcript in pieces, and a history of word-fragments would be
+            // useless to replay.
+            this.assistantTurnText += content.outputTranscription.text
             this.socket.emit(ServerEvent.Transcript, {
                 role: 'assistant',
                 text: content.outputTranscription.text,
@@ -400,6 +437,8 @@ class VoiceSession {
 
         if (content.turnComplete || content.generationComplete) {
             const finished = this.turnId
+            this.remember('assistant', this.assistantTurnText)
+            this.assistantTurnText = ''
             this.socket.emit(ServerEvent.TurnComplete, { turnId: finished })
             this.turnId += 1
             this.audioSeq = 0
@@ -538,6 +577,7 @@ class VoiceSession {
         if (!this.live || this.closed) return
         const trimmed = String(text || '').trim()
         if (!trimmed) return
+        this.remember('user', trimmed)
         // Typed input is a first-class path, not a fallback bolted on: same session, same
         // tools, same spoken reply. It is also the accessibility route for anyone who
         // cannot or will not use a microphone.
@@ -576,19 +616,54 @@ class VoiceSession {
         }
     }
 
-    /** Language changes need a new provider session: it is fixed at setup time. */
+    /**
+     * Switches spoken language without losing the task in progress.
+     *
+     * `speechConfig.languageCode` is fixed when a Live session is set up, so this has to
+     * open a new one. What must NOT happen is the patient losing their place: someone who
+     * has just picked a doctor and a slot, then switches to Hindi to finish, cannot be
+     * dropped back at "how can I help you".
+     *
+     * So the conversation so far is replayed into the new session as context, with
+     * `turnComplete: false` — the model receives the history but is not asked to respond
+     * to it, leaving it ready for the patient's next utterance with everything it knew
+     * before. The transcript on screen is deliberately left intact too.
+     */
     async changeLanguage(language) {
         if (this.closed) return
+
         this.cancelCurrentTurn()
+        this.assistantTurnText = ''
         try {
             if (this.live) this.live.close()
         } catch {
             /* ignore */
         }
         this.live = null
+        // A handle from the previous session belongs to the previous language config, so
+        // it is dropped; `history` is what carries context across instead.
         this.resumeHandle = null
         this.setState('connecting')
+
+        const carried = this.history.slice()
         await this.start(language)
+
+        if (this.closed || !this.live || carried.length === 0) return
+
+        try {
+            this.live.sendClientContent({
+                turns: carried.map((turn) => ({
+                    role: turn.role === 'assistant' ? 'model' : 'user',
+                    parts: [{ text: turn.text }],
+                })),
+                turnComplete: false,
+            })
+            console.log(`[voice] language -> ${language}, replayed ${carried.length} turns`)
+        } catch (error) {
+            // Context replay failing is not fatal: the session is live and usable, just
+            // without memory of what came before. Better than refusing the switch.
+            console.error('[voice] history replay failed:', error)
+        }
     }
 }
 
@@ -677,10 +752,15 @@ function attachVoiceGateway(io, options) {
         })
 
         socket.on(ClientEvent.Start, (payload) => {
-            session.start((payload && payload.language) || undefined).catch((error) => {
-                console.error('[voice] start failed:', error)
-                session.fail('internal', 'Could not start the voice assistant.', false)
-            })
+            session
+                .start(
+                    (payload && payload.language) || undefined,
+                    (payload && payload.timeZone) || undefined,
+                )
+                .catch((error) => {
+                    console.error('[voice] start failed:', error)
+                    session.fail('internal', 'Could not start the voice assistant.', false)
+                })
         })
 
         socket.on(ClientEvent.Audio, (chunk) => session.pushAudio(chunk))

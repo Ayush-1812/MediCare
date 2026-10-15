@@ -59,6 +59,12 @@ export const ClientEvent = {
 
 export type StartPayload = {
     language?: LanguageCode
+    /**
+     * IANA zone from the browser, e.g. "Asia/Kolkata". Sent because every date the
+     * assistant speaks or confirms has to be in the patient's own zone — "tomorrow
+     * evening" is meaningless otherwise, and a server-side guess books the wrong day.
+     */
+    timeZone?: string
     /** Set when resuming after a transport drop, so completed actions are not repeated. */
     sessionId?: string
 }
@@ -91,6 +97,8 @@ export const ServerEvent = {
 export type ReadyPayload = {
     sessionId: string
     language: LanguageCode
+    /** The zone the server actually accepted, which may differ if ours was rejected. */
+    timeZone?: string
     model: string
     /** True when this resumed an existing session rather than starting fresh. */
     resumed: boolean

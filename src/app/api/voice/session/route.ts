@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getSessionId } from '@/lib/auth'
 import { buildLiveConfig } from '@/lib/voice/liveConfig'
+import { buildTimeContext } from '@/lib/voice/prompt'
 import { DEFAULT_LANGUAGE, VOICE_MODEL, isSupportedLanguage } from '@/lib/voice/config'
 import { appointmentStatus, consultationJoinState } from '@/lib/appointment'
 
@@ -36,13 +37,29 @@ export async function POST(request: Request) {
         return NextResponse.json({ ok: false, error: 'Not signed in' }, { status: 401 })
     }
 
-    let requested: unknown
+    let body: { language?: unknown; timeZone?: unknown } = {}
     try {
-        requested = (await request.json())?.language
+        body = (await request.json()) ?? {}
     } catch {
-        requested = undefined
+        /* defaults below */
     }
-    const language = isSupportedLanguage(requested) ? requested : DEFAULT_LANGUAGE
+    const language = isSupportedLanguage(body.language) ? body.language : DEFAULT_LANGUAGE
+
+    /**
+     * The zone comes from the patient's own browser. Validated by asking Intl to use it:
+     * an unknown or hostile value throws, and we fall back rather than letting it reach
+     * the prompt. `Asia/Kolkata` is the right default for this app — it prices in INR and
+     * its pharmacy search is India-centric.
+     */
+    let timeZone = 'Asia/Kolkata'
+    if (typeof body.timeZone === 'string' && body.timeZone.length < 64) {
+        try {
+            new Intl.DateTimeFormat('en-IN', { timeZone: body.timeZone }).format(new Date())
+            timeZone = body.timeZone
+        } catch {
+            /* keep the default */
+        }
+    }
 
     const [user, appointments] = await Promise.all([
         prisma.user.findUnique({ where: { id: userId }, select: { name: true } }),
@@ -75,12 +92,14 @@ export async function POST(request: Request) {
             hasJoinableConsultation,
         },
         language,
+        buildTimeContext(timeZone),
     )
 
     return NextResponse.json({
         ok: true,
         userId,
         language,
+        timeZone,
         model: VOICE_MODEL,
         config,
     })

@@ -29,6 +29,7 @@ import {
     type ToolPayload,
     type TranscriptPayload,
     type TurnCompletePayload,
+    type VoiceErrorCode,
     type VoiceState,
 } from './protocol'
 import {
@@ -36,8 +37,11 @@ import {
     DEFAULT_LANGUAGE,
     INPUT_SAMPLE_RATE,
     OUTPUT_SAMPLE_RATE,
+    SUPPORTED_LANGUAGES,
+    detectScript,
     type LanguageCode,
 } from './config'
+import { createTranslator, errorMessage, toolLabel, type Translator } from './i18n'
 
 export type TranscriptEntry = {
     id: string
@@ -48,6 +52,15 @@ export type TranscriptEntry = {
 }
 
 export type VoiceSessionError = ErrorPayload | null
+
+/**
+ * A language the patient appears to be speaking that is not the one selected.
+ *
+ * Offered rather than applied. Script can identify a writing system reliably but cannot
+ * separate languages that share one — Hindi and Marathi are both Devanagari — so silently
+ * switching would sometimes be wrong in a way the patient cannot undo mid-sentence.
+ */
+export type LanguageSuggestion = { code: LanguageCode; label: string } | null
 
 export type UseVoiceSession = {
     state: VoiceState
@@ -60,6 +73,13 @@ export type UseVoiceSession = {
     muted: boolean
     language: LanguageCode
     connected: boolean
+    /** Localized string lookup for the current language. */
+    t: Translator
+    suggestion: LanguageSuggestion
+    acceptSuggestion: () => void
+    dismissSuggestion: () => void
+    /** True while a language change is reopening the provider session. */
+    switchingLanguage: boolean
     start: () => Promise<void>
     stop: () => void
     interrupt: () => void
@@ -68,38 +88,27 @@ export type UseVoiceSession = {
     changeLanguage: (language: LanguageCode) => void
 }
 
-/** `getUserMedia` rejection names → our error codes and guidance the user can act on. */
-function micError(error: unknown): ErrorPayload {
+/**
+ * `getUserMedia` rejection names → our error codes.
+ *
+ * Only the code is decided here; the wording comes from the message catalog so the
+ * guidance appears in the patient's own language. An English-only error under a Tamil
+ * conversation is the inconsistency Phase 3 is meant to remove.
+ */
+function micErrorCode(error: unknown): VoiceErrorCode {
     const name = (error as { name?: string })?.name ?? ''
-    if (name === 'NotAllowedError' || name === 'SecurityError') {
-        return {
-            code: 'mic_denied',
-            message:
-                'Microphone access was blocked. Allow it in your browser’s address bar, ' +
-                'then try again — or type your question instead.',
-            recoverable: true,
-        }
-    }
-    if (name === 'NotFoundError' || name === 'OverconstrainedError') {
-        return {
-            code: 'mic_unavailable',
-            message: 'No microphone was found. You can still type your question.',
-            recoverable: true,
-        }
-    }
-    if (name === 'NotReadableError' || name === 'AbortError') {
-        return {
-            code: 'mic_in_use',
-            message:
-                'Your microphone is being used by another app or tab. Close it and try ' +
-                'again, or type your question.',
-            recoverable: true,
-        }
-    }
-    return {
-        code: 'internal',
-        message: 'The microphone could not be started. You can still type your question.',
-        recoverable: true,
+    if (name === 'NotAllowedError' || name === 'SecurityError') return 'mic_denied'
+    if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'mic_unavailable'
+    if (name === 'NotReadableError' || name === 'AbortError') return 'mic_in_use'
+    return 'internal'
+}
+
+/** The browser's own zone, or null when the environment will not say. */
+function browserTimeZone(): string | undefined {
+    try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined
+    } catch {
+        return undefined
     }
 }
 
@@ -114,6 +123,12 @@ export function useVoiceSession(): UseVoiceSession {
     const [muted, setMutedState] = useState(false)
     const [language, setLanguage] = useState<LanguageCode>(DEFAULT_LANGUAGE)
     const [connected, setConnected] = useState(false)
+    const [suggestion, setSuggestion] = useState<LanguageSuggestion>(null)
+    const [switchingLanguage, setSwitchingLanguage] = useState(false)
+
+    const t = useMemo(() => createTranslator(language), [language])
+    /** Suggestions the patient has waved away, so they are not asked twice. */
+    const dismissedRef = useRef<Set<string>>(new Set())
 
     const socketRef = useRef<Socket | null>(null)
     const streamRef = useRef<MediaStream | null>(null)
@@ -130,6 +145,18 @@ export function useVoiceSession(): UseVoiceSession {
     const currentTurnRef = useRef(1)
     /** Throttles level updates; at 50 frames a second React would re-render constantly. */
     const lastLevelPushRef = useRef(0)
+
+    /**
+     * Mirrors `language` for use inside socket handlers.
+     *
+     * The handlers are registered once in `start` and would otherwise close over the
+     * language as it was at that moment, so every later comparison would be against a
+     * stale value — and the detection hint would fire against the wrong baseline.
+     */
+    const languageRef = useRef<LanguageCode>(DEFAULT_LANGUAGE)
+    useEffect(() => {
+        languageRef.current = language
+    }, [language])
 
     // ── Teardown ────────────────────────────────────────────────────────────
 
@@ -171,7 +198,32 @@ export function useVoiceSession(): UseVoiceSession {
 
     // ── Transcript assembly ─────────────────────────────────────────────────
 
+    /**
+     * Proposes a language when the patient is clearly writing in another script.
+     *
+     * Only fires on final user transcripts of reasonable length — an interim guess at two
+     * syllables is not evidence — and never for a script the current language already
+     * uses, which is what keeps a Hindi speaker from being asked about Marathi.
+     */
+    const considerLanguage = useCallback((text: string) => {
+        if (text.trim().length < 8) return
+
+        const current = SUPPORTED_LANGUAGES.find((l) => l.code === languageRef.current)
+        const script = detectScript(text)
+        if (!script || !current || script === current.script) return
+
+        const candidate = SUPPORTED_LANGUAGES.find(
+            (l) => l.script === script && l.code !== 'en-US',
+        )
+        if (!candidate || candidate.code === languageRef.current) return
+        if (dismissedRef.current.has(candidate.code)) return
+
+        setSuggestion({ code: candidate.code, label: candidate.label })
+    }, [])
+
     const appendTranscript = useCallback((payload: TranscriptPayload) => {
+        if (payload.role === 'user' && payload.final) considerLanguage(payload.text)
+
         setTranscript((prev) => {
             const next = [...prev]
 
@@ -312,20 +364,19 @@ export function useVoiceSession(): UseVoiceSession {
 
         socket.on('connect', () => {
             setConnected(true)
-            socket.emit(ClientEvent.Start, { language })
+            socket.emit(ClientEvent.Start, { language, timeZone: browserTimeZone() })
         })
 
         socket.on('connect_error', (err) => {
             // The gateway rejects the handshake with a human-readable reason — a missing
             // session, or a consultation already holding the microphone.
-            const message = err?.message || 'Could not connect'
-            const consultation = /consultation/i.test(message)
+            const message = err?.message || ''
+            const code: VoiceErrorCode = /consultation/i.test(message)
+                ? 'consultation_active'
+                : 'unauthorized'
             setError({
-                code: consultation ? 'consultation_active' : 'unauthorized',
-                message: consultation
-                    ? 'You are in a video consultation right now. The assistant cannot use ' +
-                      'your microphone at the same time.'
-                    : message,
+                code,
+                message: errorMessage(createTranslator(languageRef.current), code),
                 recoverable: false,
             })
             setState('error')
@@ -339,6 +390,7 @@ export function useVoiceSession(): UseVoiceSession {
 
         socket.on(ServerEvent.Ready, async (payload: ReadyPayload) => {
             setLanguage(payload.language)
+            setSwitchingLanguage(false)
             try {
                 // Playback first: if the mic is refused we still want to hear the reply to
                 // a typed question, so a denied microphone degrades to text rather than
@@ -347,7 +399,14 @@ export function useVoiceSession(): UseVoiceSession {
                 if (!captureCtxRef.current) await startCapture(socket)
                 setState('listening')
             } catch (err) {
-                setError(micError(err))
+                const code = micErrorCode(err)
+                setError({
+                    code,
+                    // Wording comes from the catalog, so the guidance is in the language
+                    // the patient is actually speaking.
+                    message: errorMessage(createTranslator(payload.language), code),
+                    recoverable: true,
+                })
                 setState('listening')
             }
         })
@@ -396,7 +455,14 @@ export function useVoiceSession(): UseVoiceSession {
         })
 
         socket.on(ServerEvent.Tool, (payload: ToolPayload & { clientAction?: unknown }) => {
-            setActivity(payload.status === 'running' ? payload.label : null)
+            // The gateway's `label` is English; it is useful in server logs but must not
+            // reach the panel untranslated, so the label is resolved from the tool name
+            // against the current catalog instead.
+            setActivity(
+                payload.status === 'running'
+                    ? toolLabel(createTranslator(languageRef.current), payload.name)
+                    : null,
+            )
 
             const action = payload.clientAction as
                 | { kind: 'navigate'; path: string }
@@ -415,8 +481,14 @@ export function useVoiceSession(): UseVoiceSession {
         })
 
         socket.on(ServerEvent.Error, (payload: ErrorPayload) => {
-            setError(payload)
+            // The gateway sends a code and an English message; the code is what we trust,
+            // so the text shown matches the conversation's language.
+            setError({
+                ...payload,
+                message: errorMessage(createTranslator(languageRef.current), payload.code),
+            })
             setState(payload.recoverable ? 'listening' : 'error')
+            setSwitchingLanguage(false)
             if (!payload.recoverable) releaseAudio()
         })
     }, [appendTranscript, language, releaseAudio, router, startCapture, startPlayback])
@@ -449,10 +521,25 @@ export function useVoiceSession(): UseVoiceSession {
 
     const changeLanguage = useCallback((next: LanguageCode) => {
         setLanguage(next)
-        setTranscript([])
-        // The provider fixes language at setup, so the gateway reopens the session.
-        if (socketRef.current) socketRef.current.emit(ClientEvent.Language, { language: next })
+        setSuggestion(null)
+        // The transcript is deliberately NOT cleared. The provider fixes language at setup
+        // so the gateway must reopen the session, but it replays the conversation into the
+        // new one — losing the visible history would make a mid-task switch feel like
+        // starting over, which is the thing this is supposed to avoid.
+        if (socketRef.current) {
+            setSwitchingLanguage(true)
+            socketRef.current.emit(ClientEvent.Language, { language: next })
+        }
     }, [])
+
+    const acceptSuggestion = useCallback(() => {
+        if (suggestion) changeLanguage(suggestion.code)
+    }, [suggestion, changeLanguage])
+
+    const dismissSuggestion = useCallback(() => {
+        if (suggestion) dismissedRef.current.add(suggestion.code)
+        setSuggestion(null)
+    }, [suggestion])
 
     return useMemo(
         () => ({
@@ -464,6 +551,11 @@ export function useVoiceSession(): UseVoiceSession {
             muted,
             language,
             connected,
+            t,
+            suggestion,
+            acceptSuggestion,
+            dismissSuggestion,
+            switchingLanguage,
             start,
             stop,
             interrupt,
@@ -480,6 +572,11 @@ export function useVoiceSession(): UseVoiceSession {
             muted,
             language,
             connected,
+            t,
+            suggestion,
+            acceptSuggestion,
+            dismissSuggestion,
+            switchingLanguage,
             start,
             stop,
             interrupt,
