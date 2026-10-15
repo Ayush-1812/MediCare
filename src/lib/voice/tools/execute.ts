@@ -14,6 +14,7 @@
  */
 
 import prisma from '@/lib/prisma'
+import { getSessionId } from '@/lib/auth'
 import { getProfile, listAppointments } from '@/app/actions/userActions'
 import { getPrescriptions } from '@/app/actions/prescriptionActions'
 import { getConsultationDetails } from '@/app/actions/consultationActions'
@@ -27,6 +28,16 @@ import {
     parseSlotDateTime,
 } from '@/lib/appointment'
 import { MUTATING_TOOLS } from './definitions'
+import { FAQ_TOPICS, SUPPORT_ROUTE, faqFor } from '@/lib/faq'
+import { UNTRUSTED_CONTENT_RULE, wrapUntrustedFields } from '@/lib/voice/untrusted'
+import {
+    executeBooking,
+    executeCancellation,
+    executeReschedule,
+    proposeBooking,
+    proposeCancellation,
+    proposeReschedule,
+} from './actions'
 
 export type ToolArgs = Record<string, unknown>
 
@@ -37,6 +48,21 @@ export type ToolOutcome = {
     data: unknown
     /** Client-side side effect, currently only navigation. */
     clientAction?: { kind: 'navigate'; path: string; reason?: string }
+    /**
+     * A consequential action awaiting confirmation. The gateway stores this; the model
+     * never sees it, so it cannot fabricate one or alter its parameters.
+     */
+    pendingAction?: {
+        action: 'book' | 'cancel' | 'reschedule'
+        params: Record<string, string>
+        summary: string
+    }
+    /**
+     * Structured data for the panel to render — doctor cards, slot chips, a confirmation
+     * card. Separate from `data` because the model's copy is shaped for speech while the
+     * UI wants fields it can lay out without parsing a sentence.
+     */
+    uiPayload?: Record<string, unknown>
 }
 
 // ─── Argument coercion ───────────────────────────────────────────────────────
@@ -432,6 +458,346 @@ function toolNavigate(args: ToolArgs): ToolOutcome {
     }
 }
 
+// ─── Additional read tools ───────────────────────────────────────────────────
+
+async function toolGetDoctorProfile(args: ToolArgs): Promise<ToolOutcome> {
+    const doctorId = str(args.doctorId)
+    const doctorName = str(args.doctorName)
+    if (!doctorId && !doctorName) {
+        return { ok: false, data: { error: 'Provide doctorId or doctorName.' } }
+    }
+
+    const doctor = await prisma.doctor.findFirst({
+        where: {
+            profileCompleted: true,
+            ...(doctorId ? { id: doctorId } : { name: { contains: doctorName as string, mode: 'insensitive' } }),
+        },
+        // Deliberately the public field set. `email` and `phone` are never selected here —
+        // this is reachable by any signed-in patient, and a doctor's contact details are
+        // not theirs to hand out.
+        select: {
+            id: true,
+            name: true,
+            speciality: true,
+            degree: true,
+            experience: true,
+            about: true,
+            awards: true,
+            languages: true,
+            hospital: true,
+            city: true,
+            fees: true,
+            available: true,
+            rating: true,
+            totalReviews: true,
+            consultationModes: true,
+        },
+    })
+    if (!doctor) return { ok: true, data: { found: false } }
+
+    return {
+        ok: true,
+        data: {
+            found: true,
+            ...wrapUntrustedFields(
+                {
+                    id: doctor.id,
+                    name: doctor.name,
+                    speciality: doctor.speciality,
+                    degree: doctor.degree,
+                    experience: doctor.experience,
+                    hospital: doctor.hospital,
+                    city: doctor.city,
+                    fee: doctor.fees ?? null,
+                    acceptingBookings: doctor.available,
+                    rating: doctor.totalReviews > 0 ? doctor.rating : null,
+                    reviews: doctor.totalReviews || null,
+                    consultationModes: doctor.consultationModes,
+                    // Doctors type these themselves, so they are third-party text.
+                    about: doctor.about,
+                    awards: doctor.awards,
+                    languages: doctor.languages,
+                },
+                ['about', 'awards', 'languages'],
+            ),
+            // 10 of 13 doctors have nothing recorded, so the absence is reported
+            // explicitly rather than left for the model to interpret as "none".
+            languagesListed: Boolean(doctor.languages?.trim()),
+            untrustedContentRule: UNTRUSTED_CONTENT_RULE,
+        },
+        uiPayload: {
+            kind: 'doctor',
+            id: doctor.id,
+            name: doctor.name,
+            speciality: doctor.speciality,
+            fee: doctor.fees ?? null,
+            city: doctor.city,
+            hospital: doctor.hospital,
+        },
+    }
+}
+
+async function toolGetConsultationStatus(args: ToolArgs): Promise<ToolOutcome> {
+    const appointmentId = str(args.appointmentId)
+    if (!appointmentId) return { ok: false, data: { error: 'appointmentId is required.' } }
+
+    // Authorizes internally and redacts the doctor's private notes for a patient.
+    const details = await getConsultationDetails(appointmentId)
+    if (!details.success) return { ok: false, data: { error: details.message } }
+
+    const a = details.appointment
+    const join = consultationJoinState({
+        slotDate: a.slotDate,
+        slotTime: a.slotTime,
+        cancelled: a.cancelled,
+        isCompleted: a.isCompleted,
+        startTime: a.startTime,
+        meetingId: a.meetingId,
+    })
+
+    return {
+        ok: true,
+        data: {
+            when: formatSlotDateTime(a.slotDate, a.slotTime),
+            doctor: a.doctorName,
+            status: appointmentStatus({
+                slotDate: a.slotDate,
+                slotTime: a.slotTime,
+                cancelled: a.cancelled,
+                isCompleted: a.isCompleted,
+                startTime: a.startTime,
+            }),
+            // Straight from the existing helper: the room opens 15 minutes before the slot
+            // and stays open once the doctor has started it. The agent must not invent its
+            // own rule, and must not imply it can open the room — only the doctor can.
+            canJoinNow: join.canJoin,
+            whyNot: join.reason ?? null,
+            roomOpened: Boolean(a.meetingId),
+            doctorStartsTheRoom: true,
+        },
+    }
+}
+
+async function toolExplainPrescription(args: ToolArgs): Promise<ToolOutcome> {
+    const prescriptionId = str(args.prescriptionId)
+    if (!prescriptionId) return { ok: false, data: { error: 'prescriptionId is required.' } }
+
+    const userId = await getSessionId('user')
+    if (!userId) return { ok: false, data: { error: 'Not signed in.' } }
+
+    // Ownership in the query itself, so another patient's id simply returns nothing.
+    const prescription = await prisma.prescription.findFirst({
+        where: { id: prescriptionId, userId },
+        select: {
+            id: true,
+            medicines: true,
+            notes: true,
+            rawText: true,
+            ocrEngine: true,
+            ocrConfidence: true,
+            isVerified: true,
+            createdAt: true,
+        },
+    })
+    if (!prescription) return { ok: true, data: { found: false } }
+
+    const confidence = prescription.ocrConfidence
+
+    return {
+        ok: true,
+        data: {
+            found: true,
+            savedOn: prescription.createdAt.toLocaleDateString('en-IN', {
+                day: 'numeric',
+                month: 'long',
+                year: 'numeric',
+            }),
+            // Medicines come from OCR of a photographed document — foreign text by
+            // definition, and the most likely place an injected instruction would appear.
+            ...wrapUntrustedFields(
+                { medicines: prescription.medicines, notes: prescription.notes },
+                ['medicines', 'notes'],
+            ),
+            extraction: {
+                engine: prescription.ocrEngine,
+                confidence,
+                verifiedByPatient: prescription.isVerified,
+            },
+            // The caveat is part of the payload rather than left to the prompt, so a
+            // low-confidence scan cannot be read out as though it were a clean record.
+            caveat:
+                confidence !== null && confidence !== undefined && confidence < 0.8
+                    ? 'This scan was low confidence. Say so, read it as "what the scan read", ' +
+                      'and tell the patient to check it against the paper or ask their doctor.'
+                    : 'Read medicines and doses exactly. This is a scan of a document, not a ' +
+                      'clinical instruction from MediCare — a clinician must verify anything ' +
+                      'the patient intends to act on.',
+            untrustedContentRule: UNTRUSTED_CONTENT_RULE,
+        },
+    }
+}
+
+async function toolGetPaymentStatus(args: ToolArgs): Promise<ToolOutcome> {
+    const appointmentId = str(args.appointmentId)
+    if (!appointmentId) return { ok: false, data: { error: 'appointmentId is required.' } }
+
+    const userId = await getSessionId('user')
+    if (!userId) return { ok: false, data: { error: 'Not signed in.' } }
+
+    const appointment = await prisma.appointment.findFirst({
+        where: { id: appointmentId, userId },
+        select: {
+            id: true,
+            amount: true,
+            payment: true,
+            cancelled: true,
+            slotDate: true,
+            slotTime: true,
+            doctor: { select: { name: true } },
+        },
+    })
+    if (!appointment) return { ok: true, data: { found: false } }
+
+    return {
+        ok: true,
+        data: {
+            found: true,
+            doctor: appointment.doctor?.name ?? null,
+            when: formatSlotDateTime(appointment.slotDate, appointment.slotTime),
+            amount: appointment.amount,
+            // Read straight from the row the payment verification writes. The agent states
+            // this and nothing more — it cannot confirm a payment itself.
+            paid: appointment.payment,
+            cancelled: appointment.cancelled,
+            howToPay:
+                appointment.payment || appointment.amount === 0
+                    ? null
+                    : 'Payment happens in the app through Razorpay. Offer to open the ' +
+                      'appointments page; never ask for a card, UPI id or OTP.',
+        },
+    }
+}
+
+/**
+ * Nearby pharmacies.
+ *
+ * Coordinates are **not** in this tool's declared schema. They are attached by the gateway
+ * from the browser's own geolocation result after the patient granted permission, under
+ * the reserved `__coords` key. A model-supplied latitude would be a guess, and a guessed
+ * location returns confidently wrong pharmacies.
+ */
+async function toolFindNearbyPharmacies(args: ToolArgs): Promise<ToolOutcome> {
+    const coords = args.__coords as { lat?: number; lng?: number } | undefined
+    const lat = typeof coords?.lat === 'number' ? coords.lat : undefined
+    const lng = typeof coords?.lng === 'number' ? coords.lng : undefined
+
+    if (lat === undefined || lng === undefined) {
+        return {
+            ok: true,
+            data: {
+                consentRequired: true,
+                instruction:
+                    'You do not have the patient\'s location. Ask them to allow location ' +
+                    'access using the button in the panel, then try again. Do not guess a city.',
+            },
+            uiPayload: { kind: 'location_consent' },
+        }
+    }
+
+    if (!process.env.SERPAPI_KEY) {
+        return {
+            ok: false,
+            data: {
+                error:
+                    'Pharmacy search is not configured on this server. Tell the patient it is ' +
+                    'unavailable right now and offer the pharmacies page.',
+            },
+        }
+    }
+
+    const limit = limitOf(args.limit, 3)
+    const base = process.env.APP_URL || 'http://127.0.0.1:3000'
+    const url = `${base}/api/nearby-pharmacies?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`
+
+    const response = await fetch(url, { headers: { accept: 'application/json' } })
+    if (!response.ok) {
+        return {
+            ok: false,
+            data: { error: 'Could not search for pharmacies right now.' },
+        }
+    }
+
+    const payload = (await response.json()) as { pharmacies?: unknown[] }
+    const all = Array.isArray(payload.pharmacies) ? payload.pharmacies : []
+    const shown = all.slice(0, limit).map((raw) => {
+        const p = raw as Record<string, unknown>
+        return wrapUntrustedFields(
+            {
+                // Names and addresses come from a third-party search provider.
+                name: p.title ?? p.name ?? null,
+                address: p.address ?? null,
+                distanceKm: p.distanceKm ?? null,
+                openState: p.open_state ?? p.openState ?? null,
+            },
+            ['name', 'address', 'openState'],
+        )
+    })
+
+    return {
+        ok: true,
+        data: {
+            count: shown.length,
+            total: all.length,
+            pharmacies: shown,
+            untrustedContentRule: UNTRUSTED_CONTENT_RULE,
+            ...(shown.length === 0 ? { note: 'No pharmacies came back for that location.' } : {}),
+        },
+        uiPayload: { kind: 'pharmacies', pharmacies: shown },
+    }
+}
+
+function toolAnswerFaq(args: ToolArgs): ToolOutcome {
+    const topic = str(args.topic)
+    const entry = topic ? faqFor(topic) : undefined
+    if (!entry) {
+        return {
+            ok: true,
+            data: {
+                found: false,
+                availableTopics: FAQ_TOPICS,
+                instruction:
+                    'The FAQ does not cover this. Say so plainly and offer the contact page — ' +
+                    'do not answer from general knowledge about MediCare.',
+            },
+        }
+    }
+    // First-party content, shown verbatim on the landing page. Not wrapped as untrusted
+    // because MediCare wrote it — but equally, it is the only thing the agent may recite
+    // as official policy.
+    return {
+        ok: true,
+        data: { found: true, question: entry.question, answer: entry.answer },
+    }
+}
+
+function toolGetSupportContact(): ToolOutcome {
+    return {
+        ok: true,
+        data: {
+            route: SUPPORT_ROUTE,
+            // Stated so the agent cannot imply a ticket was raised. MediCare has no
+            // ticketing backend, and claiming a request was submitted would be a lie the
+            // patient only discovers when nobody replies.
+            canCreateTicket: false,
+            instruction:
+                'MediCare has no support ticket system. You cannot submit a request. Offer to ' +
+                'open the contact page so they can get in touch themselves, and say that is ' +
+                'what you are doing.',
+        },
+        clientAction: { kind: 'navigate', path: SUPPORT_ROUTE, reason: 'to contact support' },
+    }
+}
+
 // ─── Dispatch ────────────────────────────────────────────────────────────────
 
 /**
@@ -465,8 +831,56 @@ export async function executeVoiceTool(
             return toolGetConsultationSummary(args)
         case 'navigate':
             return toolNavigate(args)
+
+        case 'get_doctor_profile':
+            return toolGetDoctorProfile(args)
+        case 'get_consultation_status':
+            return toolGetConsultationStatus(args)
+        case 'explain_prescription':
+            return toolExplainPrescription(args)
+        case 'get_payment_status':
+            return toolGetPaymentStatus(args)
+        case 'find_nearby_pharmacies':
+            return toolFindNearbyPharmacies(args)
+        case 'answer_faq':
+            return toolAnswerFaq(args)
+        case 'get_support_contact':
+            return toolGetSupportContact()
+
+        // Proposals validate and price against live data but change nothing.
+        case 'propose_booking':
+            return proposeBooking(args)
+        case 'propose_cancellation':
+            return proposeCancellation(args)
+        case 'propose_reschedule':
+            return proposeReschedule(args)
+
         default:
             return { ok: false, data: { error: `Unknown tool "${name}".` } }
+    }
+}
+
+/**
+ * Commits a previously confirmed action.
+ *
+ * Reached only from the gateway, which supplies `params` from its pending-action store
+ * after the patient confirmed. Separate from `executeVoiceTool` so there is no name the
+ * model could pass that lands here — the model's vocabulary is the declared tool list, and
+ * none of these appear in it.
+ */
+export async function commitVoiceAction(
+    action: string,
+    params: Record<string, string>,
+): Promise<ToolOutcome> {
+    switch (action) {
+        case 'book':
+            return executeBooking(params)
+        case 'cancel':
+            return executeCancellation(params)
+        case 'reschedule':
+            return executeReschedule(params)
+        default:
+            return { ok: false, data: { error: `Unknown action "${action}".` } }
     }
 }
 
