@@ -56,7 +56,7 @@
 | 7 | Doctor directory | `doctorList:500` (filters `profileCompleted`, returns `PUBLIC_DOCTOR_FIELDS`, no email) | `READ` | public | — | Speciality filtering happens in the client (`DoctorsDirectory`, `/doctors/[speciality]`), not in the action — voice needs a server-side filtered query | Voice support |
 | 8 | Specialities | `SpecialityMenu.tsx`, `/doctors/[speciality]` | `READ` | public | — | Speciality list is UI-side; `Doctor.speciality` is a nullable free-text string, not an enum — fuzzy voice matching required | Voice support |
 | 9 | Doctor profile, fees, languages, hospital | `Doctor` model; `/appointment/[docId]` | `READ` | public | — | `fees` is nullable (`amount: fees ?? 0`) — must not be spoken as "free" | Voice support |
-| 10 | Availability / open slots | Derived from `availableDays`, `slotStartTime`, `slotEndTime`, `slotDuration`, `slots_booked` | `READ` | public | — | **Slot generation lives in the page component, not a reusable action.** Must be extracted to a shared module so voice and UI cannot drift | Voice support *after* extraction |
+| 10 | Availability / open slots | Derived from `availableDays`, `slotStartTime`, `slotEndTime`, `slotDuration`, `slots_booked` | `READ` | public | — | Already extracted to `src/lib/schedule.ts` (`generateSlots`, `parseAvailableDays`, `toSlotMap`) — framework-agnostic, no `use client`, directly reusable by voice. **Correction to the first draft of this audit, which wrongly placed this logic in the page component** | Voice support (reuse `lib/schedule`) |
 | 11 | Book appointment | `bookAppointment:224` — `$transaction` guards the read-modify-write on `slots_booked`, throws `SLOT_TAKEN`; emails deferred via `after()` | `ACT` | `user` | **Yes — mandatory** (doctor, date, time, fee) | Reuse as-is. Race-safety and email are already handled; voice must not reimplement | Voice support |
 | 12 | Payment | `createPaymentOrder:36`, `verifyPayment:80` (HMAC-SHA256 of `order_id\|payment_id`) | `BLOCKED` → `GUIDE` | `user` | — | Razorpay Checkout is a **browser SDK modal**; card/UPI entry cannot and must not happen over voice (PCI + the server never trusts a client callback alone) | Documented blocker; hand off to UI after booking |
 | 13 | Appointment history | `listAppointments:361` | `READ` | `user` | — | Returns all appointments unpaginated — voice must summarize, not read 40 rows aloud | Voice support |
@@ -140,11 +140,11 @@ Every user-facing feature discovered has exactly one assigned outcome — none o
 | Razorpay checkout (#12) | Browser SDK modal; card/UPI capture over voice is not acceptable | Voice books the slot, then hands off to the existing checkout UI. Agent confirms payment status by reading `Appointment.payment` |
 | No reschedule action (#15) | Cancel + rebook is non-atomic — the patient can lose their original slot | Implement a real `rescheduleAppointment` action in one `$transaction`, mirroring `bookAppointment`'s `SLOT_TAKEN` guard. Until then, voice states the risk before cancelling |
 | Simulated streaming (#25) | 50ms/word *after* full generation adds seconds before first audio | Voice path bypasses `/api/chat`'s fake stream and consumes `GeminiService` output directly |
-| Slot logic in the view layer (#10) | Voice and UI would compute availability differently and drift | Extract slot generation into a shared module both call |
+| ~~Slot logic in the view layer (#10)~~ | **Not a blocker — audit correction.** `src/lib/schedule.ts` is already the shared source of truth | None; reuse it as-is |
 
 ### Prerequisites carried into Phase 2
 
-1. Extract slot generation to a shared, server-callable module (#10).
+1. ~~Extract slot generation~~ — already done in `src/lib/schedule.ts`. Voice must reuse `formatSlotTime` verbatim, because booked slots are stored and compared as `hh:mm AM/PM` en-US strings.
 2. Typed wrappers over the `FormData` actions the agent calls (#5, #6, #35).
 3. Session-level language state — STT locale, reply language, TTS voice kept in sync (#38).
 4. Microphone ownership contract between the voice agent and WebRTC (#16).
