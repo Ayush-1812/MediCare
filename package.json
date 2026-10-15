@@ -10,7 +10,10 @@
     "postinstall": "prisma generate",
     "dev:next": "next dev",
     "verify:voice": "node scripts/verify-voice.js",
-    "verify:voice:audio": "node scripts/verify-voice-audio.mjs"
+    "verify:voice:audio": "node scripts/verify-voice-audio.mjs",
+    "verify:voice:languages": "node scripts/verify-voice-languages.js",
+    "check:voice:i18n": "node scripts/check-voice-i18n.js",
+    "gen:voice:i18n": "node scripts/generate-voice-i18n.js"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",

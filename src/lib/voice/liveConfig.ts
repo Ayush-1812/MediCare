@@ -15,13 +15,18 @@ import {
     type LanguageCode,
 } from './config'
 import { VOICE_TOOLS } from './tools/definitions'
-import { buildSystemInstruction, type VoicePatientContext } from './prompt'
+import {
+    buildSystemInstruction,
+    type VoicePatientContext,
+    type VoiceTimeContext,
+} from './prompt'
 
 export type LiveSessionConfig = Record<string, unknown>
 
 export function buildLiveConfig(
     patient: VoicePatientContext,
     language: LanguageCode,
+    time: VoiceTimeContext,
     options: { includeVoice?: boolean } = {},
 ): LiveSessionConfig {
     const includeVoice = options.includeVoice !== false
@@ -32,7 +37,7 @@ export function buildLiveConfig(
         // rejected by the Live API.
         responseModalities: ['AUDIO'],
 
-        systemInstruction: buildSystemInstruction(patient, language),
+        systemInstruction: buildSystemInstruction(patient, language, time),
 
         tools: [{ functionDeclarations: VOICE_TOOLS }],
 
