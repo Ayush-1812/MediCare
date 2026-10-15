@@ -153,7 +153,20 @@ async function toolListMyAppointments(args: ToolArgs): Promise<ToolOutcome> {
         return status === 'upcoming' ? ta - tb : tb - ta
     })
 
-    const shown = matches.slice(0, limit).map(({ at, ...rest }) => rest)
+    // Fields listed explicitly rather than spread-minus-`at`: the parsed Date exists only
+    // to sort by and must not reach the model, and naming what goes out is clearer than
+    // destructuring a field away.
+    const shown = matches.slice(0, limit).map((a) => ({
+        id: a.id,
+        doctor: a.doctor,
+        speciality: a.speciality,
+        when: a.when,
+        status: a.status,
+        fee: a.fee,
+        paid: a.paid,
+        canJoinNow: a.canJoinNow,
+        joinNote: a.joinNote,
+    }))
     return {
         ok: true,
         data: {

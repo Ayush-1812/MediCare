@@ -295,7 +295,7 @@ export function useVoiceSession(): UseVoiceSession {
             })
             return next
         })
-    }, [])
+    }, [considerLanguage])
 
     // ── Audio graph ─────────────────────────────────────────────────────────
 
