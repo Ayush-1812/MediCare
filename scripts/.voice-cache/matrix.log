@@ -1,0 +1,64 @@
+===== behavior=BLOCKING scheduling=none =====
+  turn  1   1451ms  reply 66.3s  TIMEOUT
+  turn  2     NONE  reply    0s  TIMEOUT
+  turn  3     NONE  reply    0s  TIMEOUT
+  turn  4     NONE  reply    0s  TIMEOUT
+  turn  5     NONE  reply    0s  TIMEOUT
+  turn  6     NONE  reply    0s  TIMEOUT
+    replies with audio:   1/6
+    timeouts:             6
+    first-audio median:   1451 ms   (min 1451, max 1451)
+--- trace: after tool response ---
+[voice:trace] turn 1   +162ms  tool response sent: list_my_appointments
+[voice:trace] turn 1   +653ms  first audio out
+[voice:trace] turn 1    +32ms  tool response sent: list_my_appointments
+[voice:trace] turn 1 +18154ms  first audio out
+[voice:trace] turn 2 +10101ms  tool response sent: propose_cancellation
+[voice:trace] turn 2 +10582ms  first audio out
+
+===== behavior=NON_BLOCKING scheduling=INTERRUPT =====
+  turn  1  10692ms  reply  4.4s  ok 
+  turn  2  16528ms  reply  4.8s  ok 
+  turn  3     NONE  reply    0s  ok 
+  turn  4     NONE  reply    0s  ok 
+    replies with audio:   2/4
+    timeouts:             0
+    first-audio median:   16528 ms   (min 10692, max 16528)
+--- trace: after tool response ---
+[voice:trace] turn 2    start  tool response sent: list_my_appointments
+[voice:trace] turn 2    start  first audio out
+[voice:trace] turn 3     +4ms  first audio out
+[voice:trace] turn 5    start  tool response sent: search_doctors
+
+===== behavior=UNSET scheduling=INTERRUPT =====
+  turn  1  15661ms  reply  5.8s  ok 
+  turn  2     NONE  reply    0s  TIMEOUT
+  turn  3     NONE  reply    0s  ok 
+  turn  4     NONE  reply    0s  TIMEOUT
+  turn  5  21401ms  reply  4.1s  ok 
+  turn  6     NONE  reply    0s  TIMEOUT
+    replies with audio:   2/6
+    timeouts:             3
+    first-audio median:   21401 ms   (min 15661, max 21401)
+--- trace: after tool response ---
+[voice:trace] turn 2    start  tool response sent: list_my_appointments
+[voice:trace] turn 2    start  first audio out
+[voice:trace] turn 2    start  tool response sent: list_my_appointments
+[voice:trace] turn 4    start  tool response sent: search_doctors
+[voice:trace] turn 2    start  first audio out
+[voice:trace] turn 5    start  tool response sent: search_doctors
+[voice:trace] turn 5    start  first audio out
+
+===== behavior=UNSET scheduling=none =====
+  turn  1  22136ms  reply  5.6s  ok 
+  turn  2     NONE  reply    0s  ok 
+  turn  3     NONE  reply    0s  ok 
+    replies with audio:   1/3
+    timeouts:             0
+    first-audio median:   22136 ms   (min 22136, max 22136)
+--- trace: after tool response ---
+[voice:trace] turn 2    start  tool response sent: list_my_appointments
+[voice:trace] turn 2    start  first audio out
+[voice:trace] turn 4    start  tool response sent: search_doctors
+
+MATRIX DONE

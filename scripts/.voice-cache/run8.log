@@ -1,0 +1,42 @@
+Long-session stability — 8 turns over http://127.0.0.1:3000/voice
+  synthesizing questions (cached after the first run)...
+  turn  1   1503ms  reply  3.2s  ok 
+           Q: What appointments do I have coming up?
+           heard: "What appointments do I have coming up?"
+           said:  "You have no upcoming appointments scheduled at the moment."
+  turn  2   1437ms  reply 10.8s  ok 
+           Q: Can you find me a dermatologist?
+           heard: "Can you find me a dermatologist?"
+           said:  "I found three dermatologists for you. There is Dr. Aditi Sharma in New Delhi, Dr. Rohan Ka"
+  turn  3  17312ms  reply  4.2s  ok 
+           Q: How much does Doctor Aditi Sharma charge?
+           heard: "How much does Dr. Aditi Sharma charge?"
+           said:  "Dr. Aditi Sharma charges seven hundred rupees for a consultation."
+  turn  4     NONE  reply    0s  TIMEOUT
+           Q: Is my data secure on MediCare?
+           heard: "Is my data secure on Medicare?"
+           said:  ""
+  turn  5  10280ms  reply  9.4s  ok  INTERRUPTED
+           Q: Find me a pediatrician in Bengaluru.
+           heard: ""
+           said:  "Yes, we use enterprise-grade encryption and comply with all healthcare data privacy regula"
+  turn  6     NONE  reply    0s  ok  INTERRUPTED
+           Q: What is my blood group?
+           heard: "Find me a pediatrician in Bengaluru.What is my blood group?"
+           said:  ""
+  turn  7     NONE  reply    0s  ok  INTERRUPTED
+           Q: Show me my prescriptions.
+           heard: "Show me my prescriptions."
+           said:  ""
+  turn  8     45ms  reply  3.3s  ok 
+           Q: Find a gastroenterologist under eight hundred rupees.
+           heard: ""
+           said:  "You do not have any saved prescriptions at the moment."
+  summary
+    replies with audio:   5/8
+    timeouts:             1
+    interrupted:          3
+    first-audio median:   1503 ms   (min 45, max 17312)
+    first half avg:       6751 ms
+    second half avg:      5163 ms   <- degradation shows here
+    ended early:          disconnected: io client disconnect

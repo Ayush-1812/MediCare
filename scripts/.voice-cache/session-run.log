@@ -1,0 +1,45 @@
+
+Long-session stability — 8 turns over http://127.0.0.1:3000/voice
+  synthesizing questions (cached after the first run)...
+  turn  1  14519ms  reply  3.5s  ok 
+           Q: What appointments do I have coming up?
+           heard: "What appointments do I have coming up?"
+           said:  "Hello Ayush, let me check your upcoming appointments for you."
+  turn  2     NONE  reply    0s  TIMEOUT
+           Q: Can you find me a dermatologist?
+           heard: ""
+           said:  ""
+  turn  3  21108ms  reply  2.8s  ok 
+           Q: How much does Doctor Aditi Sharma charge?
+           heard: "Can you find me a dermatologist?"
+           said:  "Let me look for available dermatologists for you."
+  turn  4     NONE  reply    0s  TIMEOUT
+           Q: Is my data secure on MediCare?
+           heard: ""
+           said:  ""
+  turn  5     NONE  reply    0s  TIMEOUT
+           Q: Find me a pediatrician in Bengaluru.
+           heard: ""
+           said:  ""
+  turn  6     76ms  reply  3.5s  ok 
+           Q: What is my blood group?
+           heard: "How much does Dr. Aditi Sharma charge?"
+           said:  "Let me check the consultation fee for Dr. Aditi Sharma."
+  turn  7     NONE  reply    0s  TIMEOUT
+           Q: Show me my prescriptions.
+           heard: ""
+           said:  ""
+  turn  8     NONE  reply  3.1s  ok 
+           Q: Find a gastroenterologist under eight hundred rupees.
+           heard: "Is my data secure on Medicare?"
+           said:  "I can certainly share how we protect your information."
+
+  summary
+    replies with audio:   3/8
+    timeouts:             4
+    interrupted:          0
+    first-audio median:   14519 ms   (min 76, max 21108)
+    first half avg:       17814 ms
+    second half avg:      76 ms   <- degradation shows here
+    ended early:          disconnected: io client disconnect
+
