@@ -253,8 +253,11 @@ export const VOICE_TOOLS: FunctionDeclaration[] = [
  * `turnComplete: true` makes the model idle instantly. Only streaming real audio — which
  * scripts/verify-voice-session.ts does — exposed it.
  */
+const TOOL_BEHAVIOR = process.env.VOICE_TOOL_BEHAVIOR ?? 'BLOCKING'
 for (const tool of VOICE_TOOLS) {
-    tool.behavior = Behavior.BLOCKING
+    if (TOOL_BEHAVIOR === 'BLOCKING') tool.behavior = Behavior.BLOCKING
+    else if (TOOL_BEHAVIOR === 'NON_BLOCKING') tool.behavior = Behavior.NON_BLOCKING
+    // 'UNSET' leaves the field off entirely, which is the provider default.
 }
 
 /** Short UI labels, so the "thinking" state can say what it is actually doing. */

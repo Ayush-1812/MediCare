@@ -206,8 +206,25 @@ async function main() {
         }
         return out
     }
-    const send = (pcm: Int16Array) =>
+    /**
+     * GATED=1 stops streaming silence. After each utterance it sends a single stream-end
+     * and then nothing until the next one — the way a client with local voice detection
+     * behaves. Without it, the mic streams 50 frames a second forever, silence included.
+     */
+    const GATED = process.env.GATED === '1'
+    let streamEnded = false
+    const send = (pcm: Int16Array) => {
+        // In gated mode an all-zero frame is silence, and silence is not transmitted.
+        if (GATED && !pcm.some((v) => v !== 0)) {
+            if (!streamEnded) {
+                socket.emit('voice:audio-end')
+                streamEnded = true
+            }
+            return
+        }
+        streamEnded = false
         socket.emit('voice:audio', Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength))
+    }
 
     const stats: TurnStat[] = []
 
@@ -242,6 +259,15 @@ async function main() {
         }
         // Let any trailing audio and echo drain before the next question.
         for (let i = 0; i < 40 && !fatal; i++) {
+            send(echoFrame())
+            await sleep(FRAME_MS)
+        }
+
+        // GAP_MS spaces turns out, keeping the mic open with silence as a live one would.
+        // Used to test the rate-limit hypothesis: if stalls vanish when turns are spread
+        // over a longer period, the limit is a per-minute budget rather than our code.
+        const gapUntil = Date.now() + Number(process.env.GAP_MS || 0)
+        while (!fatal && Date.now() < gapUntil) {
             send(echoFrame())
             await sleep(FRAME_MS)
         }
