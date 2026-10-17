@@ -28,6 +28,15 @@ import {
     parseSlotDateTime,
 } from '@/lib/appointment'
 import { MUTATING_TOOLS } from './definitions'
+import {
+    DOCTORS_KEY,
+    DOCTORS_TTL_MS,
+    PATIENT_TTL_MS,
+    cached,
+    invalidate,
+    patientKey,
+    patientPrefix,
+} from '../cache'
 import { FAQ_TOPICS, SUPPORT_ROUTE, faqFor } from '@/lib/faq'
 import { UNTRUSTED_CONTENT_RULE, wrapUntrustedFields } from '@/lib/voice/untrusted'
 import {
@@ -87,10 +96,103 @@ function limitOf(value: unknown, fallback: number, max = 5): number {
     return Math.max(1, Math.min(max, Math.floor(parsed)))
 }
 
+// ─── Cached reads ────────────────────────────────────────────────────────────
+//
+// The database answers a bare SELECT 1 in 0.8-3.1 seconds from this deployment (measured;
+// see cache.ts). These loaders route every read the voice layer makes through the
+// stale-while-revalidate cache, so a turn only ever waits on the database the very first
+// time a value is needed — and session start warms the common ones before that.
+
+/**
+ * Every bookable doctor, in one query.
+ *
+ * Fifty-odd rows. Loading them all and filtering in memory costs one round trip per
+ * minute at most, against three or four per conversation for per-search queries — and the
+ * filters (`contains`, case-insensitive) are trivial to do in JavaScript.
+ *
+ * `profileCompleted` and `available` mirror `doctorList` exactly: a doctor who never
+ * finished onboarding has no fee or consulting hours and must never be offered.
+ */
+function loadDirectory() {
+    return cached(DOCTORS_KEY, DOCTORS_TTL_MS, () =>
+        prisma.doctor.findMany({
+            where: { profileCompleted: true },
+            select: {
+                id: true,
+                name: true,
+                speciality: true,
+                degree: true,
+                experience: true,
+                about: true,
+                awards: true,
+                fees: true,
+                city: true,
+                hospital: true,
+                languages: true,
+                rating: true,
+                totalReviews: true,
+                available: true,
+                consultationModes: true,
+                availableDays: true,
+                slotStartTime: true,
+                slotEndTime: true,
+                slotDuration: true,
+                slots_booked: true,
+            },
+        }),
+    )
+}
+
+type DirectoryDoctor = Awaited<ReturnType<typeof loadDirectory>>[number]
+
+function includesCI(haystack: string | null | undefined, needle: string): boolean {
+    return (haystack ?? '').toLowerCase().includes(needle.toLowerCase())
+}
+
+/** Resolves a doctor by id, or by a loose name match — from the cached directory. */
+async function findDoctor(id?: string, name?: string): Promise<DirectoryDoctor | undefined> {
+    const directory = await loadDirectory()
+    if (id) return directory.find((d) => d.id === id)
+    if (name) {
+        // Strip a spoken "Dr" prefix so "Dr Aditi Sharma" and "Aditi Sharma" both match a
+        // stored "Dr. Aditi Sharma" — the voice path hears names, it does not type them.
+        const needle = name.replace(/^dr\.?\s*/i, '').trim()
+        return directory.find((d) => includesCI(d.name, needle))
+    }
+    return undefined
+}
+
+const cachedProfile = (userId: string) =>
+    cached(patientKey(userId, 'profile'), PATIENT_TTL_MS, () => getProfile())
+const cachedAppointments = (userId: string) =>
+    cached(patientKey(userId, 'appointments'), PATIENT_TTL_MS, () => listAppointments())
+const cachedPrescriptions = (userId: string) =>
+    cached(patientKey(userId, 'prescriptions'), PATIENT_TTL_MS, () => getPrescriptions())
+const cachedHealth = (userId: string) =>
+    cached(patientKey(userId, 'health'), PATIENT_TTL_MS, () => new HealthSummaryTool().execute(userId))
+
+/**
+ * Warms the cache for one patient at session start.
+ *
+ * Fired and forgotten: the session must not wait on it. By the time the greeting has
+ * played and the patient has asked their first question, the answer is usually already
+ * in memory, so even the first lookup of the call is instant.
+ */
+export function primeVoiceCaches(userId: string): void {
+    // Calls the cached loaders directly rather than wrapping them in `prime`: wrapping
+    // `loadDirectory` (which is itself a `cached` call) would register the same key as
+    // in flight twice, and the inner load's cleanup would race the outer one's.
+    const warn = (what: string) => (error: unknown) =>
+        console.error(`[voice:cache] warm-up of ${what} failed:`, (error as Error)?.message)
+    loadDirectory().catch(warn('directory'))
+    cachedAppointments(userId).catch(warn('appointments'))
+    cachedProfile(userId).catch(warn('profile'))
+}
+
 // ─── Read tools ──────────────────────────────────────────────────────────────
 
-async function toolGetMyProfile(): Promise<ToolOutcome> {
-    const result = await getProfile()
+async function toolGetMyProfile(userId: string): Promise<ToolOutcome> {
+    const result = await cachedProfile(userId)
     if (!result.success) return { ok: false, data: { error: result.message } }
 
     const u = result.userData
@@ -113,8 +215,8 @@ async function toolGetMyProfile(): Promise<ToolOutcome> {
     }
 }
 
-async function toolListMyAppointments(args: ToolArgs): Promise<ToolOutcome> {
-    const result = await listAppointments()
+async function toolListMyAppointments(userId: string, args: ToolArgs): Promise<ToolOutcome> {
+    const result = await cachedAppointments(userId)
     if (!result.success) return { ok: false, data: { error: result.message } }
 
     const status = str(args.status) ?? 'upcoming'
@@ -186,35 +288,19 @@ async function toolSearchDoctors(args: ToolArgs): Promise<ToolOutcome> {
     const language = str(args.language)
     const maxFee = num(args.maxFee)
 
-    // `profileCompleted` and `available` mirror `doctorList` exactly: a doctor who never
-    // finished onboarding has no fee or consulting hours and is not bookable, and the
-    // agent must never offer one.
-    const doctors = await prisma.doctor.findMany({
-        where: {
-            profileCompleted: true,
-            available: true,
-            ...(speciality ? { speciality: { contains: speciality, mode: 'insensitive' } } : {}),
-            ...(city ? { city: { contains: city, mode: 'insensitive' } } : {}),
-            ...(name ? { name: { contains: name, mode: 'insensitive' } } : {}),
-            ...(language ? { languages: { contains: language, mode: 'insensitive' } } : {}),
-            ...(maxFee !== undefined ? { fees: { lte: Math.ceil(maxFee) } } : {}),
-        },
-        select: {
-            id: true,
-            name: true,
-            speciality: true,
-            degree: true,
-            experience: true,
-            fees: true,
-            city: true,
-            hospital: true,
-            languages: true,
-            rating: true,
-            totalReviews: true,
-        },
-        orderBy: [{ rating: 'desc' }, { name: 'asc' }],
-        take: limit + 1,
-    })
+    // Filtered in memory over the cached directory — same semantics as the Prisma query
+    // this replaced (case-insensitive `contains`, `fees <= maxFee`, rating desc then name),
+    // without paying a 1-3 second database round trip per search.
+    const needleName = name?.replace(/^dr\.?\s*/i, '').trim()
+    const doctors = (await loadDirectory())
+        .filter((d) => d.available)
+        .filter((d) => !speciality || includesCI(d.speciality, speciality))
+        .filter((d) => !city || includesCI(d.city, city))
+        .filter((d) => !needleName || includesCI(d.name, needleName))
+        .filter((d) => !language || includesCI(d.languages, language))
+        .filter((d) => maxFee === undefined || (d.fees !== null && d.fees <= Math.ceil(maxFee)))
+        .sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0) || a.name.localeCompare(b.name))
+        .slice(0, limit + 1)
 
     const shown = doctors.slice(0, limit).map((d) => ({
         id: d.id,
@@ -251,26 +337,11 @@ async function toolGetDoctorAvailability(args: ToolArgs): Promise<ToolOutcome> {
         return { ok: false, data: { error: 'Provide doctorId or doctorName.' } }
     }
 
-    const doctor = await prisma.doctor.findFirst({
-        where: {
-            profileCompleted: true,
-            ...(doctorId
-                ? { id: doctorId }
-                : { name: { contains: doctorName as string, mode: 'insensitive' } }),
-        },
-        select: {
-            id: true,
-            name: true,
-            speciality: true,
-            fees: true,
-            available: true,
-            availableDays: true,
-            slotStartTime: true,
-            slotEndTime: true,
-            slotDuration: true,
-            slots_booked: true,
-        },
-    })
+    // From the cached directory. Its `slots_booked` can be up to a minute old, which is
+    // acceptable here because this tool only DISPLAYS times — `propose_booking` re-reads
+    // the doctor fresh from the database and refuses a slot that has gone, and every
+    // committed booking invalidates the directory so the next read is current.
+    const doctor = await findDoctor(doctorId, doctorName)
     if (!doctor) return { ok: true, data: { found: false, note: 'No such bookable doctor.' } }
 
     if (!doctor.available) {
@@ -336,8 +407,8 @@ async function toolGetDoctorAvailability(args: ToolArgs): Promise<ToolOutcome> {
     }
 }
 
-async function toolListMyPrescriptions(args: ToolArgs): Promise<ToolOutcome> {
-    const result = await getPrescriptions()
+async function toolListMyPrescriptions(userId: string, args: ToolArgs): Promise<ToolOutcome> {
+    const result = await cachedPrescriptions(userId)
     if (!result.success) return { ok: false, data: { error: result.message } }
 
     const limit = limitOf(args.limit, 2)
@@ -367,7 +438,7 @@ async function toolListMyPrescriptions(args: ToolArgs): Promise<ToolOutcome> {
 }
 
 async function toolGetHealthSummary(userId: string): Promise<ToolOutcome> {
-    const result = await new HealthSummaryTool().execute(userId)
+    const result = await cachedHealth(userId)
     return { ok: result.success, data: result.data }
 }
 
@@ -480,32 +551,10 @@ async function toolGetDoctorProfile(args: ToolArgs): Promise<ToolOutcome> {
         return { ok: false, data: { error: 'Provide doctorId or doctorName.' } }
     }
 
-    const doctor = await prisma.doctor.findFirst({
-        where: {
-            profileCompleted: true,
-            ...(doctorId ? { id: doctorId } : { name: { contains: doctorName as string, mode: 'insensitive' } }),
-        },
-        // Deliberately the public field set. `email` and `phone` are never selected here —
-        // this is reachable by any signed-in patient, and a doctor's contact details are
-        // not theirs to hand out.
-        select: {
-            id: true,
-            name: true,
-            speciality: true,
-            degree: true,
-            experience: true,
-            about: true,
-            awards: true,
-            languages: true,
-            hospital: true,
-            city: true,
-            fees: true,
-            available: true,
-            rating: true,
-            totalReviews: true,
-            consultationModes: true,
-        },
-    })
+    // From the cached directory, whose select deliberately omits `email` and `phone` —
+    // this is reachable by any signed-in patient, and a doctor's contact details are not
+    // theirs to hand out. Keep it that way if the directory select is ever widened.
+    const doctor = await findDoctor(doctorId, doctorName)
     if (!doctor) return { ok: true, data: { found: false } }
 
     return {
@@ -827,15 +876,15 @@ export async function executeVoiceTool(
 ): Promise<ToolOutcome> {
     switch (name) {
         case 'get_my_profile':
-            return toolGetMyProfile()
+            return toolGetMyProfile(userId)
         case 'list_my_appointments':
-            return toolListMyAppointments(args)
+            return toolListMyAppointments(userId, args)
         case 'search_doctors':
             return toolSearchDoctors(args)
         case 'get_doctor_availability':
             return toolGetDoctorAvailability(args)
         case 'list_my_prescriptions':
-            return toolListMyPrescriptions(args)
+            return toolListMyPrescriptions(userId, args)
         case 'get_health_summary':
             return toolGetHealthSummary(userId)
         case 'assess_symptoms':
@@ -882,19 +931,36 @@ export async function executeVoiceTool(
  * none of these appear in it.
  */
 export async function commitVoiceAction(
+    userId: string,
     action: string,
     params: Record<string, string>,
 ): Promise<ToolOutcome> {
+    let outcome: ToolOutcome
     switch (action) {
         case 'book':
-            return executeBooking(params)
+            outcome = await executeBooking(params)
+            break
         case 'cancel':
-            return executeCancellation(params)
+            outcome = await executeCancellation(params)
+            break
         case 'reschedule':
-            return executeReschedule(params)
+            outcome = await executeReschedule(params)
+            break
         default:
             return { ok: false, data: { error: `Unknown action "${action}".` } }
     }
+
+    // Invalidate on ANY attempt, not just success. A failed booking may still have
+    // changed nothing — but a timed-out one may have changed something, and serving the
+    // pre-write list after an uncertain write is exactly the stale answer that would make
+    // the agent tell a patient they have no appointment when they do. One extra cold
+    // read is a cheap price for that.
+    //
+    // The directory is dropped too: every one of these actions rewrites `slots_booked`,
+    // and the availability tool reads from it.
+    invalidate(patientPrefix(userId))
+    invalidate(DOCTORS_KEY)
+    return outcome
 }
 
 /** True when a tool's effects outlive the conversation and so must not be replayed. */
