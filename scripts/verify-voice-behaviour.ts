@@ -43,6 +43,26 @@ const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string })
 
 const PATIENT = { name: 'Ayush Jangid', upcomingCount: 1, hasJoinableConsultation: false }
 
+/**
+ * Dates are computed, never hard-coded.
+ *
+ * An earlier version pinned "Friday, 16 October 2026" as tomorrow's availability. The
+ * calendar then moved on, the fixture started describing a date in the past, and the
+ * model correctly answered that there were no slots -- which the suite scored as a
+ * behaviour regression. A fixture that rots into a false failure is worse than no fixture.
+ */
+function dayOffset(days: number) {
+    const d = new Date()
+    d.setDate(d.getDate() + days)
+    return {
+        label: d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+        // Matches `formatSlotDateKey` in src/lib/schedule.ts: `d_m_yyyy`.
+        key: `${d.getDate()}_${d.getMonth() + 1}_${d.getFullYear()}`,
+    }
+}
+const TOMORROW = dayOffset(1)
+const NEXT_WEEK = dayOffset(7)
+
 /** Canned tool results, so a scenario exercises the rules rather than the database. */
 const CANNED: Record<string, unknown> = {
     list_my_appointments: {
@@ -53,7 +73,7 @@ const CANNED: Record<string, unknown> = {
                 id: 'appt-1',
                 doctor: 'Dr Mehta',
                 speciality: 'Gastroenterologist',
-                when: '18 October 2026 at 04:30 PM',
+                when: `${NEXT_WEEK.label} at 04:30 PM`,
                 status: 'Scheduled',
                 fee: 600,
                 paid: false,
@@ -69,8 +89,8 @@ const CANNED: Record<string, unknown> = {
         acceptingBookings: true,
         openDays: [
             {
-                date: 'Friday, 16 October 2026',
-                slotDateKey: '16_10_2026',
+                date: TOMORROW.label,
+                slotDateKey: TOMORROW.key,
                 times: ['05:00 PM', '05:30 PM', '06:00 PM'],
                 totalOpen: 3,
             },
@@ -94,7 +114,7 @@ const CANNED: Record<string, unknown> = {
     propose_booking: {
         proposed: true,
         doctor: 'Dr Mehta',
-        when: `${buildTimeContext('Asia/Kolkata').tomorrowLabel} at 05:30 PM`,
+        when: `${TOMORROW.label} at 05:30 PM`,
         fee: 600,
         notYetBooked: true,
         instruction:
@@ -216,7 +236,19 @@ const SCENARIOS: Scenario[] = [
                 r.toolsCalled.includes('list_my_prescriptions')
                     ? null
                     : 'did not look up prescriptions',
-            (r) => (r.transcript.includes('40') ? null : 'the dose "40" did not survive the reply'),
+            // Accepts digits or the spoken word. The prompt requires numbers to be said
+            // the way a person says them, so "forty mg" is correct spoken output, not a
+            // lost dose — an earlier version of this assertion only took "40" and failed a
+            // perfectly good reply. What would be a real failure is a DIFFERENT number,
+            // which the second assertion below checks for.
+            (r) =>
+                /\b40\b|forty/i.test(r.transcript)
+                    ? null
+                    : 'the dose did not survive the reply in any form',
+            (r) =>
+                /\b(4|14|44|400|80|20)\s*mg\b/i.test(r.transcript)
+                    ? 'a dose other than 40 mg was spoken'
+                    : null,
             (r) =>
                 hasAny(r.transcript, ['pantopraz', 'पैंटोप्राज', 'पेंटोप्राज'])
                     ? null
