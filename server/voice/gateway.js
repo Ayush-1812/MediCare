@@ -461,7 +461,29 @@ class VoiceSession {
             )
         }
 
-        if (content.turnComplete || content.generationComplete) {
+        /**
+         * `generationComplete` is NOT a turn boundary.
+         *
+         * The provider sends both signals for a single turn: `generationComplete` when
+         * the model stops generating, then `turnComplete` when the turn actually ends
+         * (after any tool round trip). Treating them as interchangeable — which this did —
+         * fired the boundary twice and incremented `turnId` twice per turn.
+         *
+         * That is not cosmetic. The browser drops any audio frame whose `turnId` is below
+         * the turn it believes is current, so a counter running one ahead means the NEXT
+         * reply's audio is discarded as stale and the assistant simply goes silent. It
+         * survives a slow test that waits between turns, because both events land before
+         * the next turn starts; a person answering promptly loses the reply. That is the
+         * "it replies once and then never again" report.
+         *
+         * So: generation finishing only moves the UI out of "speaking". Only
+         * `turnComplete` closes the turn.
+         */
+        if (content.generationComplete && !content.turnComplete) {
+            this.setState('listening')
+        }
+
+        if (content.turnComplete) {
             const finished = this.turnId
             this.remember('assistant', this.assistantTurnText)
             this.assistantTurnText = ''
@@ -774,21 +796,27 @@ class VoiceSession {
         }
     }
 
-    /** Manual stop button: end this turn without tearing down the session. */
+    /**
+     * Manual stop button: stop the current reply without tearing down the session.
+     *
+     * This used to send `activityStart` / `activityEnd` to the provider. Those are the
+     * MANUAL voice-activity signals, valid only when `automaticActivityDetection` is
+     * disabled — and we deliberately leave automatic detection on, so sending them was an
+     * API misuse. It appeared to "work" because an explicit activity end forces a turn
+     * boundary, which is why pressing stop seemed to make the assistant finally answer;
+     * what it was really doing was papering over the double-increment bug above while
+     * putting the session into a state we never designed for.
+     *
+     * With automatic detection on there is no separate cancel to send: the provider
+     * abandons its turn when it hears the user speak. So stopping is a local act — bump
+     * the turn so any audio still in flight is dropped, and flush what is queued. The
+     * patient stops hearing it immediately, which is what the button promises.
+     */
     interrupt() {
         if (this.closed) return
         const interrupted = this.cancelCurrentTurn()
         this.socket.emit(ServerEvent.Interrupted, { turnId: interrupted })
         this.setState('listening')
-        if (!this.live) return
-        try {
-            // Telling the provider the user's activity started is what makes it abandon
-            // its own in-progress generation, matching a real barge-in.
-            this.live.sendRealtimeInput({ activityStart: {} })
-            this.live.sendRealtimeInput({ activityEnd: {} })
-        } catch {
-            /* best effort */
-        }
     }
 
     /**
