@@ -38,7 +38,7 @@ const USER_ID = process.env.USER_ID || 'cmvcbkvot0000jyn9vqk0g73h'
 const IN_RATE = 16_000
 const FRAME_MS = 20
 const SILENCE_MS = 3_500
-const TURNS = 3
+const TURNS = Number(process.env.TURNS || 8)
 const CACHE = path.join(process.cwd(), 'scripts', '.vad-speech.pcm')
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string })
@@ -104,6 +104,8 @@ async function main() {
     // Per-turn counters, so each turn's behaviour is visible separately.
     let audioFrames = 0
     let audioBytes = 0
+    let firstAudioAt = 0
+    let speechEndedAt = 0
     const turnIdsSeen = new Set<number>()
     let ready = false
     let fatal: string | null = null
@@ -121,6 +123,7 @@ async function main() {
         const buf = Buffer.isBuffer(frame) ? frame : Buffer.from(new Uint8Array(frame))
         if (buf.length < AUDIO_HEADER_BYTES) return
         turnIdsSeen.add(buf.readUInt32LE(0))
+        if (!firstAudioAt && speechEndedAt) firstAudioAt = Date.now() - speechEndedAt
         audioFrames += 1
         audioBytes += buf.length - AUDIO_HEADER_BYTES
     })
@@ -156,6 +159,8 @@ async function main() {
         console.log(`  --- turn ${turn} ---`)
         audioFrames = 0
         audioBytes = 0
+        firstAudioAt = 0
+        speechEndedAt = 0
         turnIdsSeen.clear()
 
         for (let off = 0; off < speech.length && !fatal; off += samplesPerFrame) {
@@ -164,6 +169,7 @@ async function main() {
             await sleep(FRAME_MS)
         }
         const spokeAt = Date.now()
+        speechEndedAt = spokeAt
 
         for (let i = 0; i < SILENCE_MS / FRAME_MS && !fatal; i++) {
             socket.emit('voice:audio', Buffer.from(silence.buffer, 0, silence.byteLength))
@@ -175,9 +181,7 @@ async function main() {
             if (audioBytes > 0 && Date.now() - spokeAt > 5000) break
         }
 
-        console.log(
-            `      => audio frames: ${audioFrames}, bytes: ${audioBytes}, turnIds seen: [${[...turnIdsSeen].join(', ') || 'none'}]`,
-        )
+        console.log(`      => first audio ${firstAudioAt || 'NONE'}ms | frames ${audioFrames} | bytes ${audioBytes} | turnIds [${[...turnIdsSeen].join(', ') || 'none'}]`)
         if (audioBytes === 0) console.log(`      => ** NO AUDIO REACHED THE CLIENT ON TURN ${turn} **`)
         if (fatal) {
             console.log(`      => ${fatal}`)
