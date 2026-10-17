@@ -40,3 +40,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Cached TTS probe audio for the VAD harness — regenerated on demand.
+scripts/.vad-speech.pcm
