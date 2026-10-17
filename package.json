@@ -21,7 +21,10 @@
     "seed:doctors": "tsx prisma/seed-doctors.ts",
     "seed:doctors:commit": "tsx prisma/seed-doctors.ts --commit",
     "seed:doctors:remove": "tsx prisma/seed-doctors.ts --remove --commit",
-    "check:seed": "tsx scripts/check-seed.ts"
+    "check:seed": "tsx scripts/check-seed.ts",
+    "verify:voice:vad": "tsx scripts/verify-voice-vad.ts",
+    "verify:voice:gateway": "tsx scripts/verify-voice-gateway.ts",
+    "tune:voice": "tsx scripts/tune-voice-latency.ts"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",
