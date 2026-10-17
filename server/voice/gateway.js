@@ -76,6 +76,14 @@ const AUDIO_HEADER_BYTES = 8
  * tool names and timings, never transcripts or anything a patient said.
  */
 const TRACE = process.env.VOICE_TRACE === '1'
+
+/**
+ * Optional `scheduling` on tool responses. Unset by default — see the measurement notes
+ * where tool behaviour is declared in src/lib/voice/tools/definitions.ts. The docs say
+ * scheduling applies only to NON_BLOCKING calls, and sending it alongside BLOCKING was
+ * measured to coincide with every tool call after the first stalling for 26-51 seconds.
+ */
+const TOOL_SCHEDULING = process.env.VOICE_TOOL_SCHEDULING || null
 const INPUT_MIME_TYPE = 'audio/pcm;rate=16000'
 const TOOL_FETCH_TIMEOUT_MS = 12_000
 const SESSION_MAX_MS = 30 * 60 * 1000
@@ -648,7 +656,7 @@ class VoiceSession {
                         // continuously streaming microphone never allows — and the answer
                         // lands a turn late. INTERRUPT means "add the result and generate
                         // now". It is ignored for blocking calls, so it costs nothing there.
-                        scheduling: 'INTERRUPT',
+                        ...(TOOL_SCHEDULING ? { scheduling: TOOL_SCHEDULING } : {}),
                     },
                 ],
             })
