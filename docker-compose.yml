@@ -31,6 +31,11 @@ services:
       # Socket.IO fans WebRTC signalling across instances through Redis. Points at the
       # bundled service below, so scaling `app` to more than one replica keeps working.
       REDIS_URL: redis://redis:6379
+      # Voice receptionist. Both optional and safe to leave blank — the code falls back to
+      # its defaults on an empty value, and the gateway disables itself with a warning if
+      # GEMINI_API_KEY above is absent rather than stopping the app from booting.
+      VOICE_MODEL: ${VOICE_MODEL:-}
+      VOICE_NAME: ${VOICE_NAME:-}
       # Optional TURN relay for WebRTC. Without one, calls fail on networks that cannot
       # establish a direct peer-to-peer path (symmetric NAT, some corporate firewalls).
       TURN_URLS: ${TURN_URLS:-}

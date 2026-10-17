@@ -235,7 +235,7 @@ medicare/
 │   │   ├── mail/              # Email templates + transport
 │   │   ├── auth.ts            # JWT session helpers
 │   │   └── rateLimit.ts       # Auth endpoint throttling
-│   └── middleware.ts          # Role-based route protection
+│   └── proxy.ts               # Role-based route protection
 └── docker-compose.yml
 ```
 

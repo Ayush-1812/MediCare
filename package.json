@@ -8,7 +8,23 @@
     "start": "node server.js",
     "lint": "eslint",
     "postinstall": "prisma generate",
-    "dev:next": "next dev"
+    "dev:next": "next dev",
+    "verify:voice": "node scripts/verify-voice.js",
+    "verify:voice:audio": "node scripts/verify-voice-audio.mjs",
+    "verify:voice:languages": "node scripts/verify-voice-languages.js",
+    "verify:voice:behaviour": "tsx scripts/verify-voice-behaviour.ts",
+    "check:voice:i18n": "node scripts/check-voice-i18n.js",
+    "gen:voice:i18n": "node scripts/generate-voice-i18n.js",
+    "test:voice": "tsx scripts/test-voice-tools.ts",
+    "demo:voice": "tsx scripts/demo-voice.ts",
+    "measure:voice": "tsx scripts/measure-voice-latency.ts",
+    "seed:doctors": "tsx prisma/seed-doctors.ts",
+    "seed:doctors:commit": "tsx prisma/seed-doctors.ts --commit",
+    "seed:doctors:remove": "tsx prisma/seed-doctors.ts --remove --commit",
+    "check:seed": "tsx scripts/check-seed.ts",
+    "verify:voice:vad": "tsx scripts/verify-voice-vad.ts",
+    "verify:voice:gateway": "tsx scripts/verify-voice-gateway.ts",
+    "tune:voice": "tsx scripts/tune-voice-latency.ts"
   },
   "dependencies": {
     "@google/genai": "^2.10.0",
@@ -47,6 +63,7 @@
     "eslint-config-next": "16.1.6",
     "playwright-core": "^1.62.1",
     "tailwindcss": "^4",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }
