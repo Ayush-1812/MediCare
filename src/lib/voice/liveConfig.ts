@@ -92,7 +92,44 @@ export function buildLiveConfig(
 
         // Lifts the 15-minute audio-only session cap by compressing older context instead
         // of letting the connection expire mid-conversation.
-        contextWindowCompression: { slidingWindow: {} },
+        /**
+         * Keep the context SMALL, not merely bounded.
+         *
+         * This was `{ slidingWindow: {} }` with no trigger, which only compresses as the
+         * model's 131,072-token window fills — so in practice, never. A live session
+         * accumulates audio on both sides, and measured across one conversation the prompt
+         * grew 3,069 -> 7,002 -> 8,718 -> 10,216 tokens while replies got slower and
+         * slower. That is the "fluctuating and delaying after some responses" report.
+         *
+         * Prompt size is the dominant cost here: trimming the system prompt from 10.6k to
+         * 4.8k characters nearly halved time-to-first-audio (scripts/tune-voice-latency.ts).
+         * An unbounded transcript undoes that saving within a few turns.
+         *
+         * 6,000 trigger / 3,000 target keeps a receptionist conversation at roughly the
+         * size the first turn had, so turn ten costs about what turn one did. Compression
+         * has its own latency cost, which is why the target is half the trigger rather than
+         * just under it: it runs rarely, not on every turn.
+         *
+         * Both values are int64-as-string in this API.
+         */
+        contextWindowCompression: {
+            triggerTokens: '6000',
+            slidingWindow: { targetTokens: '3000' },
+        },
+
+        /**
+         * Cap the reply.
+         *
+         * Unbounded, one measured turn produced 66 seconds of continuous audio — the model
+         * talking at length while the patient waits for a turn that never ends, and every
+         * token of it also becoming context that slows the next turn. Observed normal
+         * replies run 14-332 response tokens, so 800 leaves generous headroom for a long
+         * legitimate answer while making a monologue impossible.
+         *
+         * The prompt already asks for two or three sentences; this is the backstop for
+         * when it does not comply.
+         */
+        maxOutputTokens: 800,
 
         // Asks the server for resumption handles so a dropped connection can be rejoined
         // with context intact. `null` here means "start a new session"; the gateway
