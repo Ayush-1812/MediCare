@@ -67,10 +67,22 @@ export function buildLiveConfig(
                 endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH',
                 // A little lead-in so the first consonant is not clipped.
                 prefixPaddingMs: 120,
-                // Long enough that a mid-sentence breath is not read as the end of a turn,
-                // short enough that the reply does not feel delayed. Medical conversations
-                // contain real pauses — people stop to recall a medicine name.
-                silenceDurationMs: 700,
+                /**
+                 * How long the provider waits after speech stops before deciding the turn
+                 * ended. This is pure dead air on EVERY spoken turn, added before the model
+                 * even begins — and unlike model latency it is entirely ours to choose.
+                 *
+                 * Was 700ms, reasoning that medical conversations contain real pauses while
+                 * someone recalls a medicine name. True, but 700ms is felt as hesitation on
+                 * every single reply, and the cost is paid constantly to protect against an
+                 * occasional mid-sentence pause. 450ms still clears a breath or a short
+                 * hesitation while removing a quarter-second from every turn.
+                 *
+                 * Lower than ~350ms starts cutting people off mid-thought, which is far
+                 * worse than a slightly slow reply — so this is the floor, not a dial to
+                 * keep turning.
+                 */
+                silenceDurationMs: 450,
             },
             // The entire point of barge-in: the moment the patient starts speaking, the
             // model's turn is cancelled rather than queued behind it.
