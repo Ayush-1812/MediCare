@@ -55,7 +55,8 @@ export function buildLiveConfig(
         // the output transcript is what the transcript pane and any future audit log
         // record. Native-audio models emit audio only, so without this there is no text
         // at all.
-        inputAudioTranscription: {},
+        // VOICE_NO_INPUT_TRANSCRIPT=1 disables this for latency experiments.
+        ...(process.env.VOICE_NO_INPUT_TRANSCRIPT === '1' ? {} : { inputAudioTranscription: {} }),
         outputAudioTranscription: {},
 
         realtimeInputConfig: {
