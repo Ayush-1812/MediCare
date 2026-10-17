@@ -387,12 +387,33 @@ export function useVoiceSession(): UseVoiceSession {
         })
 
         socket.on('connect_error', (err) => {
-            // The gateway rejects the handshake with a human-readable reason — a missing
-            // session, or a consultation already holding the microphone.
+            /**
+             * Only treat this as an auth problem when the gateway actually said so.
+             *
+             * `connect_error` covers everything that can stop a socket opening: the
+             * handshake being rejected, but equally a proxy refusing the WebSocket
+             * upgrade, a CDN in front of the app, a timeout, or the custom server not
+             * running the gateway at all. This used to map anything that did not mention
+             * "consultation" to `unauthorized`, so every one of those infrastructure
+             * failures told a signed-in patient to sign in again — advice that cannot
+             * work, and that points whoever is debugging at entirely the wrong layer.
+             *
+             * The gateway's own rejection messages are known strings (see
+             * `attachVoiceGateway`), so match those and treat everything else as "the
+             * service could not be reached", which is both true and actionable.
+             */
             const message = err?.message || ''
             const code: VoiceErrorCode = /consultation/i.test(message)
                 ? 'consultation_active'
-                : 'unauthorized'
+                : /sign in|verify your session/i.test(message)
+                  ? 'unauthorized'
+                  : 'provider_unavailable'
+
+            // The raw reason never reaches the panel — it is transport jargon — but it is
+            // the single most useful line when diagnosing a deployment, so it goes to the
+            // console verbatim.
+            console.error(`[voice] connection failed: ${message || '(no reason given)'}`)
+
             setError({
                 code,
                 message: errorMessage(createTranslator(languageRef.current), code),
