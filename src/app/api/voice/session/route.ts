@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/prisma'
 import { getSessionId } from '@/lib/auth'
 import { buildLiveConfig } from '@/lib/voice/liveConfig'
+import { primeVoiceCaches } from '@/lib/voice/tools/execute'
 import { buildTimeContext } from '@/lib/voice/prompt'
 import { DEFAULT_LANGUAGE, VOICE_MODEL, isSupportedLanguage } from '@/lib/voice/config'
 import { appointmentStatus, consultationJoinState } from '@/lib/appointment'
@@ -36,6 +37,11 @@ export async function POST(request: Request) {
     if (!userId) {
         return NextResponse.json({ ok: false, error: 'Not signed in' }, { status: 401 })
     }
+
+    // Warm the read cache now, while the provider session is still being set up and the
+    // greeting plays. With database round trips of 1-3 seconds, this is the difference
+    // between the first answer of the call being instant and being the slowest one.
+    primeVoiceCaches(userId)
 
     let body: { language?: unknown; timeZone?: unknown } = {}
     try {

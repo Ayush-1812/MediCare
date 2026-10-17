@@ -66,7 +66,7 @@ export async function POST(request: Request) {
 
     try {
         const outcome = await Promise.race([
-            commitVoiceAction(action, params),
+            commitVoiceAction(userId, action, params),
             new Promise<never>((_, reject) =>
                 setTimeout(() => reject(new Error('COMMIT_TIMEOUT')), COMMIT_TIMEOUT_MS),
             ),
