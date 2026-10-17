@@ -66,6 +66,16 @@ const ServerEvent = {
 }
 
 const AUDIO_HEADER_BYTES = 8
+
+/**
+ * Opt-in per-turn timing trace: VOICE_TRACE=1 npm run dev
+ *
+ * Prints where each turn spends its time — speech ending, the model asking for a tool,
+ * the tool answering, the first audio going out. Written because "it is slow" had
+ * several candidate causes and only a timeline separates them. Off by default: it logs
+ * tool names and timings, never transcripts or anything a patient said.
+ */
+const TRACE = process.env.VOICE_TRACE === '1'
 const INPUT_MIME_TYPE = 'audio/pcm;rate=16000'
 const TOOL_FETCH_TIMEOUT_MS = 12_000
 const SESSION_MAX_MS = 30 * 60 * 1000
@@ -145,6 +155,10 @@ class VoiceSession {
          */
         this.coords = null
 
+        /** VOICE_TRACE timeline anchor: when the current user turn's speech was heard. */
+        this.traceStart = 0
+        this.traceFirstAudio = false
+
         /**
          * Results of completed mutating tool calls, keyed by idempotency key. A session
          * that reconnects must not re-run a booking it already completed; replaying the
@@ -165,6 +179,12 @@ class VoiceSession {
     }
 
     // ── Outbound helpers ────────────────────────────────────────────────────
+
+    trace(event) {
+        if (!TRACE) return
+        const at = this.traceStart ? `+${Date.now() - this.traceStart}ms` : 'start'
+        console.log(`[voice:trace] turn ${this.turnId} ${at.padStart(8)}  ${event}`)
+    }
 
     setState(state) {
         if (this.closed || this.state === state) return
@@ -363,6 +383,13 @@ class VoiceSession {
 
         if (message.setupComplete) this.setState('listening')
 
+        if (TRACE && message.usageMetadata) {
+            const u = message.usageMetadata
+            this.trace(
+                `usage: prompt=${u.promptTokenCount ?? '?'} response=${u.responseTokenCount ?? '?'} total=${u.totalTokenCount ?? '?'}`,
+            )
+        }
+
         if (message.sessionResumptionUpdate) {
             const update = message.sessionResumptionUpdate
             // Only a handle flagged resumable is worth keeping; storing a partial one
@@ -415,6 +442,11 @@ class VoiceSession {
         }
 
         if (content.inputTranscription && content.inputTranscription.text) {
+            if (!this.traceStart) {
+                this.traceStart = Date.now()
+                this.traceFirstAudio = false
+                this.trace('user speech recognised')
+            }
             this.remember('user', content.inputTranscription.text)
             this.socket.emit(ServerEvent.Transcript, {
                 role: 'user',
@@ -454,6 +486,10 @@ class VoiceSession {
             // carries raw bytes rather than paying base64's overhead on the hot path.
             const pcm = Buffer.from(inline.data, 'base64')
             if (pcm.length === 0) continue
+            if (!this.traceFirstAudio) {
+                this.traceFirstAudio = true
+                this.trace('first audio out')
+            }
             if (this.state !== 'speaking') this.setState('speaking')
             this.socket.emit(
                 ServerEvent.Audio,
@@ -480,10 +516,13 @@ class VoiceSession {
          * `turnComplete` closes the turn.
          */
         if (content.generationComplete && !content.turnComplete) {
+            this.trace('generation complete')
             this.setState('listening')
         }
 
         if (content.turnComplete) {
+            this.trace('turn complete')
+            this.traceStart = 0
             const finished = this.turnId
             this.remember('assistant', this.assistantTurnText)
             this.assistantTurnText = ''
@@ -497,6 +536,7 @@ class VoiceSession {
     // ── Tool calls ──────────────────────────────────────────────────────────
 
     runToolCalls(calls) {
+        this.trace(`model requested: ${calls.map((c) => c.name).join(', ')}`)
         this.setState('thinking')
         for (const call of calls) this.runToolCall(call)
     }
@@ -523,11 +563,30 @@ class VoiceSession {
             ? await this.handleGatewayTool(name, args)
             : await this.fetchJson('/api/voice/tool', { name, args: toolArgs })
 
-        // Three ways this result can be void by the time it lands: the provider cancelled
-        // the call, the user interrupted (bumping turnId), or the session ended. In all
-        // three the result must be discarded rather than sent — feeding it back would have
-        // the assistant answer a question nobody is waiting on any more.
-        if (this.closed || pending.cancelled || turnId !== this.turnId) {
+        /**
+         * A result is void only if the call was genuinely abandoned: the provider
+         * cancelled it (`toolCallCancellation`), the patient interrupted (which marks
+         * pending calls cancelled in `cancelCurrentTurn`), or the session ended.
+         *
+         * It is NOT void because `turnId` moved on. This used to also discard any result
+         * whose turn had changed — and a NORMAL `turnComplete` changes it. When the model
+         * requests a tool it closes that turn with `turnComplete` and then waits for the
+         * result; the gateway bumped `turnId` on that turnComplete, so a result arriving
+         * afterwards failed the comparison and was thrown away as stale. The model then
+         * waited forever for a tool response that never came, and the patient heard
+         * nothing.
+         *
+         * That race depended on timing, which is why it hid for so long. With the old
+         * 1-10 second database, results usually arrived after turnComplete and were
+         * silently dropped — one real cause of "not responding on time". With the
+         * cache returning in ~50ms and no spoken bridge to delay turnComplete, it lost the
+         * race every single time and the agent went completely silent, which is what
+         * finally made it visible.
+         *
+         * Interruption is still honoured, through the right mechanism: `cancelCurrentTurn`
+         * sets `pending.cancelled`, which is checked here.
+         */
+        if (this.closed || pending.cancelled) {
             if (id) this.pendingTools.delete(id)
             return
         }
@@ -583,9 +642,17 @@ class VoiceSession {
                         response: response && response.data !== undefined
                             ? { result: response.data }
                             : { error: 'Tool produced no result.' },
+                        // Belt and braces for the BLOCKING declaration in definitions.ts.
+                        // If a model ever treats a call as non-blocking, the default
+                        // `WHEN_IDLE` scheduling waits for the model to go idle — which a
+                        // continuously streaming microphone never allows — and the answer
+                        // lands a turn late. INTERRUPT means "add the result and generate
+                        // now". It is ignored for blocking calls, so it costs nothing there.
+                        scheduling: 'INTERRUPT',
                     },
                 ],
             })
+            this.trace(`tool response sent: ${name}`)
         } catch (error) {
             console.error('[voice] sendToolResponse failed:', error)
         }
