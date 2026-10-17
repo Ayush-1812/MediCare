@@ -31,6 +31,12 @@ const pendingActions = new PendingActionStore()
  * which lives with the session rather than in Next. Mirrors `GATEWAY_TOOLS` in
  * `src/lib/voice/tools/definitions.ts`.
  */
+/**
+ * One live session per patient, so a reload or a second tab cannot stack provider
+ * sessions against the free tier concurrency cap. Keyed by user id.
+ */
+const liveSessions = new Map()
+
 const GATEWAY_TOOLS = new Set(['confirm_action', 'cancel_pending_action'])
 
 const VOICE_NAMESPACE = '/voice'
@@ -164,6 +170,8 @@ class VoiceSession {
         this.coords = null
 
         /** VOICE_TRACE timeline anchor: when the current user turn's speech was heard. */
+        /** True between Start arriving and the provider session existing. */
+        this.starting = false
         this.traceStart = 0
         this.traceFirstAudio = false
 
@@ -202,6 +210,9 @@ class VoiceSession {
 
     fail(code, message, recoverable) {
         if (this.closed) return
+        // Clear here too: a failed start must not leave the session stuck believing a
+        // connect is still in progress, or a retry would be ignored as a duplicate.
+        this.starting = false
         this.socket.emit(ServerEvent.Error, { code, message, recoverable })
         if (!recoverable) this.dispose()
         else this.setState('error')
@@ -261,6 +272,10 @@ class VoiceSession {
         // survives a reconnect instead of the patient having to start over.
         config.sessionResumption = this.resumeHandle ? { handle: this.resumeHandle } : {}
 
+        // Never stack sessions: if one is somehow still referenced, release it before
+        // asking the provider for another.
+        this.closeLive('replaced before reconnect')
+
         try {
             this.live = await this.ai.live.connect({
                 model: this.model,
@@ -306,7 +321,8 @@ class VoiceSession {
         }
 
         this.reconnectAttempts = 0
-        if (this.closed) return this.live.close()
+        this.starting = false
+        if (this.closed) return this.closeLive('closed during connect')
 
         this.socket.emit(ServerEvent.Ready, {
             sessionId: this.socket.id,
@@ -320,7 +336,9 @@ class VoiceSession {
     /** Provider connection lost. Resume if we can, and say so while it happens. */
     async handleDrop(reason, error, timeLeftMs) {
         if (this.closed) return
-        this.live = null
+        // Close rather than merely forget: the provider counts a session as open until it
+        // is closed or times out, and the free tier allows very few at once.
+        this.closeLive(`dropped: ${reason}`)
 
         if (this.reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
             const code = classifyProviderError(error || {})
@@ -341,18 +359,37 @@ class VoiceSession {
         await this.connectLive({ resumed: true })
     }
 
+    /**
+     * Closes the provider session and drops the reference.
+     *
+     * Every path that replaces `this.live` must go through this. The free tier allows
+     * only a handful of concurrent Live sessions, and a session we stop referencing is
+     * NOT a session the provider has released — it stays open at their end until it times
+     * out. `handleDrop` used to simply assign `this.live = null`, and `connectLive` used
+     * to overwrite the reference, so every provider error, every `goAway` reconnect and
+     * every language switch leaked one. A few of those and the next connection is
+     * competing with the ghosts of its predecessors, which looks exactly like the model
+     * "getting slower the longer you talk".
+     */
+    closeLive(why) {
+        const live = this.live
+        this.live = null
+        if (!live) return
+        try {
+            live.close()
+            if (TRACE) console.log(`[voice] closed provider session (${why})`)
+        } catch {
+            /* already gone */
+        }
+    }
+
     dispose() {
         if (this.closed) return
         this.closed = true
         clearTimeout(this.expiryTimer)
         for (const pending of this.pendingTools.values()) pending.cancelled = true
         this.pendingTools.clear()
-        try {
-            if (this.live) this.live.close()
-        } catch {
-            /* already gone */
-        }
-        this.live = null
+        this.closeLive('session disposed')
     }
 
     // ── Turn bookkeeping ────────────────────────────────────────────────────
@@ -912,12 +949,7 @@ class VoiceSession {
 
         this.cancelCurrentTurn()
         this.assistantTurnText = ''
-        try {
-            if (this.live) this.live.close()
-        } catch {
-            /* ignore */
-        }
-        this.live = null
+        this.closeLive('language change')
         // A handle from the previous session belongs to the previous language config, so
         // it is dropped; `history` is what carries context across instead.
         this.resumeHandle = null
@@ -1023,13 +1055,45 @@ function attachVoiceGateway(io, options) {
     })
 
     namespace.on('connection', (socket) => {
+        /**
+         * One voice session per patient — newest wins.
+         *
+         * A reload, a second tab, or a reconnect that outran the old socket's disconnect
+         * all produce a fresh connection while the previous one may still hold a provider
+         * session. The free tier permits only a few concurrent Live sessions, so those
+         * ghosts are not harmless: they are consumed capacity, and the newest (real) caller
+         * ends up competing with them.
+         *
+         * `server.js` already does exactly this for consultation rooms, for the same
+         * reason and with the same conclusion: the newest connection for an identity wins,
+         * and an identity can never be blocked by its own stale state.
+         */
+        const userId = socket.data.userId
+        const previous = liveSessions.get(userId)
+        if (previous) {
+            console.log('[voice] replacing an existing session for this patient')
+            try {
+                previous.dispose()
+            } catch {
+                /* best effort */
+            }
+        }
+
         const session = new VoiceSession(socket, {
             ai,
             baseUrl: options.baseUrl,
             internalSecret: options.internalSecret,
         })
+        liveSessions.set(userId, session)
 
         socket.on(ClientEvent.Start, (payload) => {
+            // Guard against a double Start: the first call already owns a provider
+            // session, and a second `connect` would leak the first.
+            if (session.starting || session.live) {
+                console.log('[voice] ignoring duplicate start')
+                return
+            }
+            session.starting = true
             session
                 .start(
                     (payload && payload.language) || undefined,
@@ -1077,6 +1141,9 @@ function attachVoiceGateway(io, options) {
         socket.on(ClientEvent.Stop, () => session.dispose())
         socket.on('disconnect', () => {
             pendingActions.clearSession(socket.data.userId, socket.id)
+            // Only clear the registry if this session is still the current one — a newer
+            // connection may already have replaced it.
+            if (liveSessions.get(userId) === session) liveSessions.delete(userId)
             session.dispose()
         })
     })
