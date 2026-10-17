@@ -145,6 +145,7 @@ async function main() {
     let firstAudioAt = 0
     let speechEndedAt = 0
     let replyBytes = 0
+    let lastAudioAt = 0
     let heard = ''
     let said = ''
     /** Assistant audio as 16kHz PCM, mixed back into the mic when ECHO=1. */
@@ -167,6 +168,7 @@ async function main() {
         if (buf.length <= HEADER) return
         if (!firstAudioAt && speechEndedAt) firstAudioAt = Date.now() - speechEndedAt
         replyBytes += buf.length - HEADER
+        lastAudioAt = Date.now()
         if (ECHO) {
             const pcm = new Int16Array(buf.buffer.slice(buf.byteOffset + HEADER, buf.byteOffset + buf.length))
             echoBuffer.push(resample(pcm, OUT_RATE, IN_RATE))
@@ -215,6 +217,7 @@ async function main() {
         firstAudioAt = 0
         speechEndedAt = 0
         replyBytes = 0
+        lastAudioAt = 0
         heard = ''
         said = ''
 
@@ -225,12 +228,17 @@ async function main() {
         }
         speechEndedAt = Date.now()
 
-        // Keep the mic open (silence, or the assistant's own echo) until the reply has
-        // finished — exactly what a live microphone does while someone listens.
+        // Wait like a real caller: until the assistant has genuinely gone quiet, not merely
+        // until the first turn boundary. A tool exchange can produce more than one model
+        // turn, and the first harness version spoke again after the first one — colliding
+        // with the answer it was waiting for and blaming the system for the overlap.
+        const QUIET_MS = 2_500
         const deadline = Date.now() + 25_000
-        while (!turnComplete && !fatal && Date.now() < deadline) {
+        while (!fatal && Date.now() < deadline) {
             send(echoFrame())
             await sleep(FRAME_MS)
+            const quietFor = Date.now() - (lastAudioAt || speechEndedAt)
+            if (turnComplete && lastAudioAt && quietFor > QUIET_MS) break
         }
         // Let any trailing audio and echo drain before the next question.
         for (let i = 0; i < 40 && !fatal; i++) {
