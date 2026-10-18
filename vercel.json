@@ -1,9 +1,0 @@
-{
-  "redirects": [
-    {
-      "source": "/:path*",
-      "destination": "https://www.medicare.imayush.site/:path*",
-      "permanent": true
-    }
-  ]
-}
