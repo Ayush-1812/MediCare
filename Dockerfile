@@ -71,8 +71,12 @@ RUN sed -i 's/\r$//' ./docker-entrypoint.sh && chmod +x ./docker-entrypoint.sh
 USER nextjs
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-    CMD node -e "fetch('http://localhost:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# Probes $PORT, not a hard-coded 3000. `server.js` listens on `process.env.PORT`, and
+# container hosts (Render, Railway, Fly, Cloud Run) inject their own — so a fixed 3000
+# here would probe a port nothing is listening on, mark a perfectly healthy container
+# unhealthy, and put it in a restart loop that looks like the app crashing.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+'/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["npm", "run", "start"]

@@ -1,0 +1,91 @@
+# Render blueprint for MediCare.
+#
+# Why Render (or any container host) rather than Vercel: this app runs a CUSTOM Node
+# server. `server.js` wraps Next and adds a Socket.IO server that carries both the WebRTC
+# signalling for video consultations and the voice receptionist's audio. Vercel does not
+# run custom servers at all — it never executes `server.js` — so on Vercel both of those
+# features are simply absent, however the rest of the app behaves.
+#
+# Deploy with:  Render dashboard -> New -> Blueprint -> point at this repository.
+# Secrets are NOT in this file. Every `sync: false` value is typed into the dashboard once
+# and stored by Render; committing them here would put your database URL and API keys in
+# git history.
+
+services:
+  - type: web
+    name: medicare
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: singapore # Closest Render region to the Supabase instance (ap-northeast-2).
+    healthCheckPath: /
+    autoDeploy: true
+
+    envVars:
+      # Render injects PORT itself and the server reads it; do not set it here.
+      - key: NODE_ENV
+        value: production
+
+      # Leave RUN_DB_PUSH unset. The entrypoint only syncs the Prisma schema when it is
+      # exactly "true", which must never happen automatically against a database holding
+      # real appointments.
+
+      # ── Required ───────────────────────────────────────────────────────
+      - key: DATABASE_URL # Supabase pooled connection (port 6543, ?pgbouncer=true)
+        sync: false
+      - key: DIRECT_URL # Supabase direct connection (port 5432), used for migrations
+        sync: false
+      - key: JWT_SECRET # Must match whatever signed existing sessions, or everyone is logged out
+        sync: false
+      - key: GEMINI_API_KEY # Without it the voice gateway disables itself and logs a warning
+        sync: false
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+
+      # ── Set this after the first deploy ────────────────────────────────
+      # Render gives the service a URL on creation. APP_URL is used for the "join video
+      # call" links in appointment emails, so a wrong value sends patients to localhost.
+      - key: APP_URL
+        sync: false
+
+      # ── Optional; each degrades gracefully when absent ─────────────────
+      - key: SERPAPI_KEY # Pharmacy search says it is unconfigured rather than inventing results
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: SMTP_HOST # No SMTP: bookings still succeed, the email is skipped and logged
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+
+      # TURN relay for WebRTC. Without one, video calls fail on networks that cannot
+      # establish a direct peer-to-peer path — symmetric NAT, many corporate firewalls.
+      - key: TURN_URLS
+        sync: false
+      - key: TURN_USERNAME
+        sync: false
+      - key: TURN_CREDENTIAL
+        sync: false
+
+      # VOICE_MODEL / VOICE_NAME are optional overrides; the defaults are in
+      # src/lib/voice/config.ts. VOICE_INTERNAL_SECRET must stay unset — server.js
+      # generates one per boot and Next reads it from the same process.
+
+# Not configured here, deliberately:
+#
+# REDIS_URL — Socket.IO fans WebRTC rooms across instances through Redis. On a single
+# instance the in-memory adapter is correct and the app logs that it is using it. Add a
+# Redis instance only when scaling past one replica, and read the note in
+# docs/voice-agent/SETUP.md about what that means for voice sessions first.
