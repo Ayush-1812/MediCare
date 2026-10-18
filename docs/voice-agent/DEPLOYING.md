@@ -68,7 +68,7 @@ Render prompts for every value marked `sync: false`. Paste them from your `.env`
 - `VOICE_INTERNAL_SECRET` — generated per boot inside the process
 - `RUN_DB_PUSH` — must stay unset, or a deploy could alter your live schema
 
-Set `APP_URL` to a placeholder for now; you get the real URL in the next step.
+**You do not need to set `APP_URL`.** Render injects `RENDER_EXTERNAL_URL` with the real service URL and the app falls back to it. Set `APP_URL` by hand only if you put a custom domain in front.
 
 ### 4. Wait for the first build
 
@@ -84,13 +84,7 @@ Eight to twelve minutes — it installs dependencies twice (build and production
 **All three lines must appear.** If the voice line is missing and instead says
 `GEMINI_API_KEY is not set`, that variable did not save.
 
-### 5. Set `APP_URL` properly
-
-Render shows your URL, e.g. `https://medicare-xxxx.onrender.com`. Put it in `APP_URL` and
-save — the service restarts. This is what appointment emails use for "join video call"
-links, so a wrong value sends patients to localhost.
-
-### 6. Verify
+### 5. Verify
 
 Open the URL and check, in order:
 

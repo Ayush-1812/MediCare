@@ -44,11 +44,10 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
 
-      # ── Set this after the first deploy ────────────────────────────────
-      # Render gives the service a URL on creation. APP_URL is used for the "join video
-      # call" links in appointment emails, so a wrong value sends patients to localhost.
-      - key: APP_URL
-        sync: false
+      # APP_URL is intentionally NOT listed. Render injects RENDER_EXTERNAL_URL with the
+      # service's real public URL, and the app falls back to it, so there is nothing to
+      # set and nothing to get wrong. Add APP_URL by hand only when putting a custom
+      # domain in front — an explicit value takes precedence.
 
       # ── Optional; each degrades gracefully when absent ─────────────────
       - key: SERPAPI_KEY # Pharmacy search says it is unconfigured rather than inventing results

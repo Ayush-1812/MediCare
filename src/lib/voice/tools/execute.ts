@@ -778,7 +778,22 @@ async function toolFindNearbyPharmacies(args: ToolArgs): Promise<ToolOutcome> {
     }
 
     const limit = limitOf(args.limit, 3)
-    const base = process.env.APP_URL || 'http://127.0.0.1:3000'
+
+    /**
+     * Loopback first, deliberately.
+     *
+     * This is one route handler calling another inside the SAME process, so the shortest
+     * correct path is 127.0.0.1 on whatever port this server is listening on. Using the
+     * public `APP_URL` instead sent the request out to the internet and back — adding a
+     * DNS lookup, a TLS handshake and a round trip to a call that never needed to leave
+     * the machine, on the latency-critical voice path.
+     *
+     * It was also a latent bug on container hosts: `APP_URL` was only consulted if set,
+     * and the fallback hard-coded port 3000, while Render and friends inject their own
+     * `PORT`. Pharmacy search would have failed there with a connection error.
+     */
+    const port = process.env.PORT || '3000'
+    const base = `http://127.0.0.1:${port}`
     const url = `${base}/api/nearby-pharmacies?lat=${encodeURIComponent(String(lat))}&lng=${encodeURIComponent(String(lng))}`
 
     const response = await fetch(url, { headers: { accept: 'application/json' } })

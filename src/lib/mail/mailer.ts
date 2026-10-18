@@ -155,11 +155,23 @@ export async function sendMail(message: MailMessage): Promise<MailResult> {
     return { sent: false, attempts: MAX_ATTEMPTS, reason, retryable: false }
 }
 
-/** Absolute base URL used to build "Join video call" links inside emails. */
+/**
+ * Absolute base URL used to build "Join video call" links inside emails.
+ *
+ * `RENDER_EXTERNAL_URL` sits alongside the existing `VERCEL_URL` fallback: Render injects
+ * the service's real public URL automatically, so a container host needs no manual
+ * `APP_URL` at all. That matters more than it looks — this value only reveals itself as
+ * wrong once a patient receives an email whose "join" link points at localhost, which is
+ * long after anyone would notice a misconfiguration. One less value to set by hand is one
+ * less way to send that email.
+ *
+ * Explicit configuration still wins, so an custom domain overrides the host's guess.
+ */
 export function appUrl(): string {
     const configured =
         process.env.NEXT_PUBLIC_APP_URL ??
         process.env.APP_URL ??
+        process.env.RENDER_EXTERNAL_URL ??
         (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined)
 
     return (configured ?? 'http://localhost:3000').replace(/\/+$/, '')
