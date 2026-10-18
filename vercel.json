@@ -1,0 +1,14 @@
+{
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "https://www.medicare.imayush.site/",
+      "permanent": false
+    },
+    {
+      "source": "/((?!_next/|.*\\.[a-zA-Z0-9]+$).*)",
+      "destination": "https://www.medicare.imayush.site/$1",
+      "permanent": false
+    }
+  ]
+}
